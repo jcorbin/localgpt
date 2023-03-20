@@ -11,7 +11,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: 'Store your AI generated data locally',
-    // Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
       </>
@@ -19,7 +19,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Full text search',
-    // Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
       </>
@@ -27,7 +27,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: 'Enhanced features',
-    // Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
       </>
