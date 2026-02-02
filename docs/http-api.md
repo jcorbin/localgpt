@@ -1,0 +1,266 @@
+---
+sidebar_position: 13
+---
+
+# HTTP API
+
+LocalGPT provides a RESTful HTTP API when running in daemon mode.
+
+## Starting the Server
+
+```bash
+localgpt daemon start
+```
+
+The server listens on `http://127.0.0.1:18790` by default.
+
+## Endpoints
+
+### Health Check
+
+Check if the server is running.
+
+```
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+```
+
+### Server Status
+
+Get detailed server status.
+
+```
+GET /api/status
+```
+
+**Response:**
+```json
+{
+  "version": "0.1.0",
+  "uptime_seconds": 3600,
+  "model": "gpt-4",
+  "memory": {
+    "files_indexed": 42,
+    "chunks": 156
+  },
+  "heartbeat": {
+    "enabled": true,
+    "last_run": "2024-01-15T10:30:00Z",
+    "next_run": "2024-01-15T11:00:00Z"
+  }
+}
+```
+
+### Chat
+
+Send a message and get a response.
+
+```
+POST /api/chat
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "message": "What is the capital of France?",
+  "model": "gpt-4",
+  "include_memory": true
+}
+```
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `message` | string | Yes | The user message |
+| `model` | string | No | Override default model |
+| `include_memory` | boolean | No | Load memory context (default: true) |
+
+**Response:**
+```json
+{
+  "response": "The capital of France is Paris.",
+  "model": "gpt-4",
+  "tokens": {
+    "prompt": 45,
+    "completion": 12,
+    "total": 57
+  },
+  "tools_used": []
+}
+```
+
+**With Tool Usage:**
+```json
+{
+  "response": "I found 3 files in your project...",
+  "model": "gpt-4",
+  "tokens": {
+    "prompt": 120,
+    "completion": 45,
+    "total": 165
+  },
+  "tools_used": [
+    {
+      "name": "bash",
+      "arguments": {"command": "ls ~/project"}
+    }
+  ]
+}
+```
+
+### Memory Search
+
+Search the memory index.
+
+```
+GET /api/memory/search?q=<query>&limit=<n>
+```
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `q` | string | Yes | Search query |
+| `limit` | integer | No | Max results (default: 10) |
+
+**Example:**
+```
+GET /api/memory/search?q=rust%20async&limit=5
+```
+
+**Response:**
+```json
+{
+  "query": "rust async",
+  "results": [
+    {
+      "file": "memory/2024-01-15.md",
+      "content": "...discussed async/await patterns in Rust...",
+      "score": 0.95,
+      "line_start": 45,
+      "line_end": 52
+    },
+    {
+      "file": "MEMORY.md",
+      "content": "## Rust Async Notes...",
+      "score": 0.72,
+      "line_start": 10,
+      "line_end": 18
+    }
+  ],
+  "total": 2
+}
+```
+
+### Memory Statistics
+
+Get memory system statistics.
+
+```
+GET /api/memory/stats
+```
+
+**Response:**
+```json
+{
+  "workspace": "~/.localgpt/workspace",
+  "files": {
+    "total": 47,
+    "memory_md": {
+      "size_bytes": 2456,
+      "lines": 42
+    },
+    "heartbeat_md": {
+      "size_bytes": 312,
+      "lines": 8
+    },
+    "daily_logs": {
+      "count": 45,
+      "total_size_bytes": 131072
+    }
+  },
+  "index": {
+    "chunks": 156,
+    "last_indexed": "2024-01-15T10:30:00Z",
+    "database_size_bytes": 250880
+  }
+}
+```
+
+## Error Responses
+
+All endpoints return errors in a consistent format:
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Missing required parameter: message"
+  }
+}
+```
+
+**Error Codes:**
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `invalid_request` | 400 | Bad request parameters |
+| `not_found` | 404 | Resource not found |
+| `provider_error` | 502 | LLM provider error |
+| `internal_error` | 500 | Internal server error |
+
+## Configuration
+
+Configure the HTTP server in `config.toml`:
+
+```toml
+[server]
+enabled = true
+port = 18790
+bind = "127.0.0.1"
+```
+
+**Security Note:** The default bind address `127.0.0.1` only accepts local connections. To expose the API over the network, change to `0.0.0.0`, but be aware this has security implications.
+
+## Using with curl
+
+**Health check:**
+```bash
+curl http://localhost:18790/health
+```
+
+**Send a chat message:**
+```bash
+curl -X POST http://localhost:18790/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, how are you?"}'
+```
+
+**Search memory:**
+```bash
+curl "http://localhost:18790/api/memory/search?q=rust"
+```
+
+## Limitations
+
+The current HTTP API has some limitations:
+
+1. **Stateless** - Each request creates a new agent (no session persistence)
+2. **No streaming** - Responses are returned all at once
+3. **No authentication** - Rely on network security (localhost binding)
+
+For multi-turn conversations with session persistence, use the CLI `chat` command.
+
+## Future Enhancements
+
+Planned API improvements:
+
+- Session-based chat with `/api/sessions`
+- Server-Sent Events (SSE) for streaming
+- WebSocket support
+- API key authentication
