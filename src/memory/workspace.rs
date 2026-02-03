@@ -150,6 +150,9 @@ agents/*/sessions/*.jsonl
 # Keep sessions.json (small metadata with CLI session IDs)
 !agents/*/sessions/sessions.json
 
+# Daemon PID file
+daemon.pid
+
 # Logs
 logs/
 

@@ -201,10 +201,9 @@ async fn run_heartbeat_once() -> Result<()> {
 }
 
 fn get_pid_file() -> Result<PathBuf> {
-    let config = Config::load()?;
-    let data_dir = shellexpand::tilde(&config.memory.workspace).to_string();
-    let data_dir = PathBuf::from(data_dir);
-    Ok(data_dir.join("daemon.pid"))
+    // Put PID file in state dir (~/.localgpt/), not workspace
+    let state_dir = localgpt::agent::get_state_dir()?;
+    Ok(state_dir.join("daemon.pid"))
 }
 
 fn is_process_running(pid: &str) -> bool {
