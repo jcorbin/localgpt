@@ -11,6 +11,15 @@ use tracing::debug;
 
 use crate::config::Config;
 
+/// Image attachment for multimodal messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageAttachment {
+    /// Base64-encoded image data
+    pub data: String,
+    /// MIME type (e.g., "image/png", "image/jpeg")
+    pub media_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
@@ -19,6 +28,9 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// Optional image attachments (for multimodal messages)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImageAttachment>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -334,14 +346,43 @@ impl OpenAIProvider {
         messages
             .iter()
             .map(|m| {
+                let role = match m.role {
+                    Role::System => "system",
+                    Role::User => "user",
+                    Role::Assistant => "assistant",
+                    Role::Tool => "tool",
+                };
+
+                // Handle multimodal content for user messages with images
+                let content: Value = if m.role == Role::User && !m.images.is_empty() {
+                    let mut content_parts: Vec<Value> = Vec::new();
+
+                    // Add images first (OpenAI uses data URLs)
+                    for img in &m.images {
+                        content_parts.push(json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:{};base64,{}", img.media_type, img.data)
+                            }
+                        }));
+                    }
+
+                    // Add text content
+                    if !m.content.is_empty() {
+                        content_parts.push(json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+
+                    json!(content_parts)
+                } else {
+                    json!(m.content)
+                };
+
                 let mut msg = json!({
-                    "role": match m.role {
-                        Role::System => "system",
-                        Role::User => "user",
-                        Role::Assistant => "assistant",
-                        Role::Tool => "tool",
-                    },
-                    "content": m.content
+                    "role": role,
+                    "content": content
                 });
 
                 if let Some(ref tool_calls) = m.tool_calls {
@@ -463,6 +504,7 @@ impl LLMProvider for OpenAIProvider {
             ),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         }];
 
         match self.chat(&messages, None).await?.content {
@@ -515,10 +557,41 @@ impl AnthropicProvider {
                     system_prompt = Some(m.content.clone());
                 }
                 Role::User => {
-                    formatted.push(json!({
-                        "role": "user",
-                        "content": m.content
-                    }));
+                    // Handle multimodal content if images are present
+                    if m.images.is_empty() {
+                        formatted.push(json!({
+                            "role": "user",
+                            "content": m.content
+                        }));
+                    } else {
+                        // Build content array with text and images
+                        let mut content_parts: Vec<Value> = Vec::new();
+
+                        // Add images first
+                        for img in &m.images {
+                            content_parts.push(json!({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": img.media_type,
+                                    "data": img.data
+                                }
+                            }));
+                        }
+
+                        // Add text content
+                        if !m.content.is_empty() {
+                            content_parts.push(json!({
+                                "type": "text",
+                                "text": m.content
+                            }));
+                        }
+
+                        formatted.push(json!({
+                            "role": "user",
+                            "content": content_parts
+                        }));
+                    }
                 }
                 Role::Assistant => {
                     if let Some(ref tool_calls) = m.tool_calls {
@@ -662,6 +735,7 @@ impl LLMProvider for AnthropicProvider {
             ),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         }];
 
         match self.chat(&messages, None).await?.content {
@@ -931,6 +1005,7 @@ impl LLMProvider for OllamaProvider {
             ),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         }];
 
         match self.chat(&messages, None).await?.content {
@@ -1260,6 +1335,7 @@ impl LLMProvider for ClaudeCliProvider {
             ),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         }];
 
         match self.chat(&messages, None).await?.content {

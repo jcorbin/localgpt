@@ -6,8 +6,8 @@ mod system_prompt;
 mod tools;
 
 pub use providers::{
-    LLMProvider, LLMResponse, LLMResponseContent, Message, Role, StreamChunk, StreamEvent,
-    StreamResult, ToolCall, ToolSchema, Usage,
+    ImageAttachment, LLMProvider, LLMResponse, LLMResponseContent, Message, Role, StreamChunk,
+    StreamEvent, StreamResult, ToolCall, ToolSchema, Usage,
 };
 pub use session::{
     get_last_session_id, get_last_session_id_for_agent, get_sessions_dir_for_agent, get_state_dir,
@@ -214,12 +214,21 @@ impl Agent {
     }
 
     pub async fn chat(&mut self, message: &str) -> Result<String> {
-        // Add user message
+        self.chat_with_images(message, Vec::new()).await
+    }
+
+    pub async fn chat_with_images(
+        &mut self,
+        message: &str,
+        images: Vec<ImageAttachment>,
+    ) -> Result<String> {
+        // Add user message with images
         self.session.add_message(Message {
             role: Role::User,
             content: message.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images,
         });
 
         // Check if we need to compact
@@ -248,6 +257,7 @@ impl Agent {
             content: final_response.clone(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         Ok(final_response)
@@ -282,6 +292,7 @@ impl Agent {
                     content: String::new(),
                     tool_calls: Some(calls),
                     tool_call_id: None,
+                    images: Vec::new(),
                 });
 
                 // Add tool results
@@ -291,6 +302,7 @@ impl Agent {
                         content: result.output.clone(),
                         tool_calls: None,
                         tool_call_id: Some(result.call_id.clone()),
+                        images: Vec::new(),
                     });
                 }
 
@@ -422,6 +434,7 @@ impl Agent {
             content: flush_prompt,
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         // Get tool schemas so agent can write files
@@ -439,6 +452,7 @@ impl Agent {
             content: final_response.clone(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         if !is_silent_reply(&final_response) {
@@ -542,12 +556,21 @@ impl Agent {
     /// Note: Tool calls during streaming are not yet supported - the model will know
     /// about tools but any tool_use blocks won't be executed automatically.
     pub async fn chat_stream(&mut self, message: &str) -> Result<StreamResult> {
-        // Add user message
+        self.chat_stream_with_images(message, Vec::new()).await
+    }
+
+    pub async fn chat_stream_with_images(
+        &mut self,
+        message: &str,
+        images: Vec<ImageAttachment>,
+    ) -> Result<StreamResult> {
+        // Add user message with images
         self.session.add_message(Message {
             role: Role::User,
             content: message.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images,
         });
 
         // Check if we need to compact
@@ -574,6 +597,7 @@ impl Agent {
             content: response.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
     }
 
@@ -590,6 +614,7 @@ impl Agent {
             content: text_response.to_string(),
             tool_calls: Some(tool_calls.clone()),
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         // Execute each tool and collect results
@@ -614,6 +639,7 @@ impl Agent {
                 content: result.output.clone(),
                 tool_calls: None,
                 tool_call_id: Some(result.call_id.clone()),
+                images: Vec::new(),
             });
         }
 
@@ -634,6 +660,7 @@ impl Agent {
             content: final_response.clone(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         Ok(final_response)
@@ -656,6 +683,7 @@ impl Agent {
             content: content.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
     }
 
@@ -666,6 +694,7 @@ impl Agent {
             content: content.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
     }
 
@@ -682,6 +711,7 @@ impl Agent {
             content: message.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         });
 
         // Check if we need to compact
@@ -734,6 +764,7 @@ impl Agent {
                                     content: text,
                                     tool_calls: None,
                                     tool_call_id: None,
+                                    images: Vec::new(),
                                 });
                                 break;
                             }
@@ -761,6 +792,7 @@ impl Agent {
                                 content: output,
                                 tool_calls: None,
                                 tool_call_id: Some(call.id.clone()),
+                                images: Vec::new(),
                             });
                         }
 
@@ -770,6 +802,7 @@ impl Agent {
                             content: String::new(),
                             tool_calls: Some(calls),
                             tool_call_id: None,
+                            images: Vec::new(),
                         });
 
                         // Continue loop to get next response

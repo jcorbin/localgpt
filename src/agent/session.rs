@@ -71,6 +71,7 @@ impl Session {
                 content: context.clone(),
                 tool_calls: None,
                 tool_call_id: None,
+                images: Vec::new(),
             });
         }
 
@@ -119,6 +120,7 @@ impl Session {
             content: format!("Previous conversation summary:\n\n{}", summary),
             tool_calls: None,
             tool_call_id: None,
+            images: Vec::new(),
         }];
 
         // Add recent messages
@@ -268,6 +270,7 @@ impl Session {
                         content: entry["content"].as_str().unwrap_or("").to_string(),
                         tool_calls: serde_json::from_value(entry["tool_calls"].clone()).ok(),
                         tool_call_id: entry["tool_call_id"].as_str().map(|s| s.to_string()),
+                        images: serde_json::from_value(entry["images"].clone()).unwrap_or_default(),
                     };
                     session.messages.push(message);
                 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use localgpt::agent::{
     get_last_session_id_for_agent, list_sessions_for_agent, search_sessions_for_agent, Agent,
-    AgentConfig,
+    AgentConfig, ImageAttachment,
 };
 use localgpt::config::Config;
 use localgpt::memory::{FastEmbedProvider, MemoryManager};
@@ -191,8 +191,12 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
     let mut stdout = io::stdout();
 
-    // Track pending file attachments
-    let mut pending_attachments: Vec<(String, String)> = Vec::new(); // (filename, content)
+    // Track pending file attachments (text and images)
+    enum Attachment {
+        Text { name: String, content: String },
+        Image { name: String, data: ImageAttachment },
+    }
+    let mut pending_attachments: Vec<Attachment> = Vec::new();
 
     loop {
         let readline = rl.readline("You: ");
@@ -231,23 +235,66 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
                 }
                 let file_path = parts[1..].join(" ");
                 let expanded = shellexpand::tilde(&file_path).to_string();
+                let path = std::path::Path::new(&expanded);
+                let filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&file_path)
+                    .to_string();
 
-                match std::fs::read_to_string(&expanded) {
-                    Ok(content) => {
-                        let filename = std::path::Path::new(&expanded)
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or(&file_path);
-                        pending_attachments.push((filename.to_string(), content));
-                        println!(
-                            "Attached: {} ({} bytes)",
-                            filename,
-                            pending_attachments.last().unwrap().1.len()
-                        );
-                        println!("Type your message to send with attachment(s), or /attachments to list.\n");
+                // Check if it's an image file
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase());
+
+                let is_image = matches!(
+                    ext.as_deref(),
+                    Some("png") | Some("jpg") | Some("jpeg") | Some("gif") | Some("webp")
+                );
+
+                if is_image {
+                    // Read as binary and encode as base64
+                    match std::fs::read(&expanded) {
+                        Ok(bytes) => {
+                            use base64::{engine::general_purpose::STANDARD, Engine as _};
+                            let data = STANDARD.encode(&bytes);
+                            let media_type = match ext.as_deref() {
+                                Some("png") => "image/png",
+                                Some("jpg") | Some("jpeg") => "image/jpeg",
+                                Some("gif") => "image/gif",
+                                Some("webp") => "image/webp",
+                                _ => "application/octet-stream",
+                            }
+                            .to_string();
+
+                            let size = bytes.len();
+                            pending_attachments.push(Attachment::Image {
+                                name: filename.clone(),
+                                data: ImageAttachment { data, media_type },
+                            });
+                            println!("Attached image: {} ({} bytes)", filename, size);
+                            println!("Type your message to send with attachment(s), or /attachments to list.\n");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to read image file: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("Failed to read file: {}", e);
+                } else {
+                    // Read as text
+                    match std::fs::read_to_string(&expanded) {
+                        Ok(content) => {
+                            let size = content.len();
+                            pending_attachments.push(Attachment::Text {
+                                name: filename.clone(),
+                                content,
+                            });
+                            println!("Attached: {} ({} bytes)", filename, size);
+                            println!("Type your message to send with attachment(s), or /attachments to list.\n");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to read file: {}", e);
+                        }
                     }
                 }
                 continue;
@@ -259,8 +306,21 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
                     println!("\nNo pending attachments.\n");
                 } else {
                     println!("\nPending attachments:");
-                    for (i, (name, content)) in pending_attachments.iter().enumerate() {
-                        println!("  {}. {} ({} bytes)", i + 1, name, content.len());
+                    for (i, att) in pending_attachments.iter().enumerate() {
+                        match att {
+                            Attachment::Text { name, content } => {
+                                println!("  {}. [text] {} ({} bytes)", i + 1, name, content.len());
+                            }
+                            Attachment::Image { name, data } => {
+                                println!(
+                                    "  {}. [image] {} ({}, {} bytes encoded)",
+                                    i + 1,
+                                    name,
+                                    data.media_type,
+                                    data.data.len()
+                                );
+                            }
+                        }
                     }
                     println!("\nType your message to send, or /clear-attachments to remove.\n");
                 }
@@ -286,23 +346,38 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
         }
 
         // Build message with attachments
-        let message = if pending_attachments.is_empty() {
-            input.to_string()
-        } else {
-            let mut msg = input.to_string();
-            msg.push_str("\n\n---\n\n**Attached files:**\n");
-            for (name, content) in &pending_attachments {
-                msg.push_str(&format!("\n### {}\n```\n{}\n```\n", name, content));
+        let mut message = input.to_string();
+        let mut images: Vec<ImageAttachment> = Vec::new();
+
+        if !pending_attachments.is_empty() {
+            let mut text_attachments = Vec::new();
+
+            // Separate text and image attachments
+            for att in pending_attachments.drain(..) {
+                match att {
+                    Attachment::Text { name, content } => {
+                        text_attachments.push((name, content));
+                    }
+                    Attachment::Image { data, .. } => {
+                        images.push(data);
+                    }
+                }
             }
-            pending_attachments.clear();
-            msg
-        };
+
+            // Add text attachments to message
+            if !text_attachments.is_empty() {
+                message.push_str("\n\n---\n\n**Attached files:**\n");
+                for (name, content) in &text_attachments {
+                    message.push_str(&format!("\n### {}\n```\n{}\n```\n", name, content));
+                }
+            }
+        }
 
         // Send message to agent with streaming
         print!("\nLocalGPT: ");
         stdout.flush()?;
 
-        match agent.chat_stream(&message).await {
+        match agent.chat_stream_with_images(&message, images).await {
             Ok(mut stream) => {
                 let mut full_response = String::new();
                 let mut pending_tool_calls = None;
