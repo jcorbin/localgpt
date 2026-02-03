@@ -1,5 +1,7 @@
+mod migrate;
 mod schema;
 
+pub use migrate::{has_openclaw_workspace, openclaw_config_path, try_migrate_openclaw_config};
 pub use schema::*;
 
 use anyhow::Result;
@@ -285,7 +287,11 @@ impl Config {
         let path = Self::config_path()?;
 
         if !path.exists() {
-            // Return default config if file doesn't exist
+            // Try to migrate from OpenClaw config
+            if let Some(migrated) = try_migrate_openclaw_config() {
+                return Ok(migrated);
+            }
+            // Return default config if no config exists
             return Ok(Config::default());
         }
 
