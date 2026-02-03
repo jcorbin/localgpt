@@ -87,6 +87,9 @@ impl Server {
             .route("/api/sessions", get(list_sessions))
             .route("/api/sessions/{session_id}", delete(delete_session))
             .route("/api/sessions/{session_id}", get(get_session_status))
+            .route("/api/sessions/{session_id}/compact", post(compact_session))
+            .route("/api/sessions/{session_id}/clear", post(clear_session))
+            .route("/api/sessions/{session_id}/model", post(set_session_model))
             .route("/api/chat", post(chat))
             .route("/api/chat/stream", post(chat_stream))
             .route("/api/ws", get(websocket_handler))
@@ -331,12 +334,90 @@ async fn get_session_status(
     }
 }
 
+// Compact session history
+async fn compact_session(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+) -> Response {
+    let mut sessions = state.sessions.lock().await;
+
+    match sessions.get_mut(&session_id) {
+        Some(entry) => {
+            entry.last_accessed = Instant::now();
+
+            match entry.agent.compact_session().await {
+                Ok((before, after)) => {
+                    Json(json!({
+                        "session_id": session_id,
+                        "token_count_before": before,
+                        "token_count_after": after,
+                    }))
+                    .into_response()
+                }
+                Err(e) => {
+                    AppError(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+                }
+            }
+        }
+        None => AppError(StatusCode::NOT_FOUND, "Session not found".to_string()).into_response(),
+    }
+}
+
+// Clear session history
+async fn clear_session(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+) -> Response {
+    let mut sessions = state.sessions.lock().await;
+
+    match sessions.get_mut(&session_id) {
+        Some(entry) => {
+            entry.last_accessed = Instant::now();
+            entry.agent.clear_session();
+            Json(json!({"session_id": session_id, "cleared": true})).into_response()
+        }
+        None => AppError(StatusCode::NOT_FOUND, "Session not found".to_string()).into_response(),
+    }
+}
+
+// Set session model
+#[derive(Deserialize)]
+struct SetModelRequest {
+    model: String,
+}
+
+async fn set_session_model(
+    State(state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SetModelRequest>,
+) -> Response {
+    let mut sessions = state.sessions.lock().await;
+
+    match sessions.get_mut(&session_id) {
+        Some(entry) => {
+            entry.last_accessed = Instant::now();
+
+            match entry.agent.set_model(&request.model) {
+                Ok(()) => {
+                    Json(json!({
+                        "session_id": session_id,
+                        "model": request.model,
+                    }))
+                    .into_response()
+                }
+                Err(e) => AppError(StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+            }
+        }
+        None => AppError(StatusCode::NOT_FOUND, "Session not found".to_string()).into_response(),
+    }
+}
+
 // Chat endpoint
 #[derive(Deserialize)]
 struct ChatRequest {
     message: String,
     session_id: Option<String>,
-    #[allow(dead_code)] // TODO: implement model switching per request
+    /// Optional model to use for this request (switches session model)
     model: Option<String>,
 }
 
@@ -364,6 +445,14 @@ async fn chat(State(state): State<Arc<AppState>>, Json(request): Json<ChatReques
     };
 
     entry.last_accessed = Instant::now();
+
+    // Switch model if requested
+    if let Some(ref model) = request.model {
+        if let Err(e) = entry.agent.set_model(model) {
+            return AppError(StatusCode::BAD_REQUEST, format!("Invalid model: {}", e))
+                .into_response();
+        }
+    }
 
     match entry.agent.chat(&request.message).await {
         Ok(response) => Json(ChatResponse {
