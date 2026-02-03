@@ -7,7 +7,10 @@ use serde_json::Value;
 use std::io::{self, Write};
 use std::sync::Arc;
 
-use localgpt::agent::{get_last_session_id_for_agent, list_sessions_for_agent, Agent, AgentConfig};
+use localgpt::agent::{
+    get_last_session_id_for_agent, list_sessions_for_agent, search_sessions_for_agent, Agent,
+    AgentConfig,
+};
 use localgpt::config::Config;
 use localgpt::memory::{FastEmbedProvider, MemoryManager};
 
@@ -318,6 +321,7 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("  /quit, /exit, /q  - Exit chat");
             println!("  /new              - Start a fresh session (reloads memory context)");
             println!("  /sessions         - List available sessions");
+            println!("  /search <query>   - Search across all sessions");
             println!("  /resume <id>      - Resume a specific session");
             println!("  /model [name]     - Show or switch model (e.g., /model gpt-4o)");
             println!("  /models           - List available model prefixes");
@@ -357,6 +361,41 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             }
             Err(e) => CommandResult::Error(format!("Failed to list sessions: {}", e)),
         },
+
+        "/search" => {
+            if parts.len() < 2 {
+                return CommandResult::Error("Usage: /search <query>".into());
+            }
+            let query = parts[1..].join(" ");
+
+            match search_sessions_for_agent(agent_id, &query) {
+                Ok(results) => {
+                    if results.is_empty() {
+                        println!("\nNo sessions found matching '{}'.\n", query);
+                    } else {
+                        println!("\nSessions matching '{}':", query);
+                        for (i, result) in results.iter().take(10).enumerate() {
+                            println!(
+                                "  {}. {} ({} matches, {})",
+                                i + 1,
+                                &result.session_id[..8.min(result.session_id.len())],
+                                result.match_count,
+                                result.created_at.format("%Y-%m-%d")
+                            );
+                            if !result.message_preview.is_empty() {
+                                println!("     \"{}\"", result.message_preview);
+                            }
+                        }
+                        if results.len() > 10 {
+                            println!("  ... and {} more", results.len() - 10);
+                        }
+                        println!("\nUse /resume <id> to resume a session.\n");
+                    }
+                    CommandResult::Continue
+                }
+                Err(e) => CommandResult::Error(format!("Search failed: {}", e)),
+            }
+        }
 
         "/resume" => {
             if parts.len() < 2 {

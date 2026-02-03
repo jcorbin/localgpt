@@ -392,6 +392,109 @@ pub fn get_last_session_id_for_agent(agent_id: &str) -> Result<Option<String>> {
     Ok(sessions.first().map(|s| s.id.clone()))
 }
 
+/// Search result from session search
+#[derive(Debug, Clone)]
+pub struct SessionSearchResult {
+    pub session_id: String,
+    pub created_at: DateTime<Utc>,
+    pub message_preview: String,
+    pub match_count: usize,
+}
+
+/// Search across all sessions for a query string
+pub fn search_sessions(query: &str) -> Result<Vec<SessionSearchResult>> {
+    search_sessions_for_agent(DEFAULT_AGENT_ID, query)
+}
+
+/// Search across all sessions for a specific agent
+pub fn search_sessions_for_agent(agent_id: &str, query: &str) -> Result<Vec<SessionSearchResult>> {
+    let sessions_dir = get_sessions_dir_for_agent(agent_id)?;
+
+    if !sessions_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let query_lower = query.to_lowercase();
+    let mut results = Vec::new();
+
+    for entry in fs::read_dir(&sessions_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+            if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                // Read the session file and search for matches
+                if let Ok(content) = fs::read_to_string(&path) {
+                    let content_lower = content.to_lowercase();
+
+                    // Count matches
+                    let match_count = content_lower.matches(&query_lower).count();
+
+                    if match_count > 0 {
+                        // Extract a preview around the first match
+                        let preview = extract_match_preview(&content, &query_lower, 100);
+
+                        // Get created_at from first line
+                        let created_at = content
+                            .lines()
+                            .next()
+                            .and_then(|line| serde_json::from_str::<Message>(line).ok())
+                            .map(|_| {
+                                // Try to parse timestamp from filename or use file metadata
+                                fs::metadata(&path)
+                                    .and_then(|m| m.created())
+                                    .map(DateTime::<Utc>::from)
+                                    .unwrap_or_else(|_| Utc::now())
+                            })
+                            .unwrap_or_else(Utc::now);
+
+                        results.push(SessionSearchResult {
+                            session_id: filename.to_string(),
+                            created_at,
+                            message_preview: preview,
+                            match_count,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by match count (most matches first)
+    results.sort_by(|a, b| b.match_count.cmp(&a.match_count));
+
+    Ok(results)
+}
+
+/// Extract a preview snippet around the first match
+fn extract_match_preview(content: &str, query_lower: &str, max_len: usize) -> String {
+    let content_lower = content.to_lowercase();
+
+    if let Some(pos) = content_lower.find(query_lower) {
+        let half_len = max_len / 2;
+        let start = pos.saturating_sub(half_len);
+        let end = (pos + query_lower.len() + half_len).min(content.len());
+
+        // Adjust to avoid breaking in middle of words
+        let slice = &content[start..end];
+
+        // Clean up: remove newlines and extra whitespace
+        let cleaned: String = slice
+            .chars()
+            .map(|c| if c.is_whitespace() { ' ' } else { c })
+            .collect();
+
+        let trimmed = cleaned.trim();
+
+        let prefix = if start > 0 { "..." } else { "" };
+        let suffix = if end < content.len() { "..." } else { "" };
+
+        format!("{}{}{}", prefix, trimmed, suffix)
+    } else {
+        String::new()
+    }
+}
+
 /// Auto-save session periodically (call after each message)
 impl Session {
     pub fn auto_save(&self) -> Result<()> {
