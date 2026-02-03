@@ -24,6 +24,7 @@ use crate::config::MemoryConfig;
 #[derive(Clone)]
 pub struct MemoryManager {
     workspace: PathBuf,
+    db_path: PathBuf,
     index: MemoryIndex,
     config: MemoryConfig,
     /// Optional embedding provider for semantic search
@@ -79,6 +80,7 @@ impl MemoryManager {
 
         Ok(Self {
             workspace,
+            db_path,
             index,
             config: config.clone(),
             embedding_provider: None,
@@ -394,7 +396,7 @@ impl MemoryManager {
 
     /// Start file watcher for automatic reindexing
     pub fn start_watcher(&self) -> Result<MemoryWatcher> {
-        MemoryWatcher::new(self.workspace.clone(), self.config.clone())
+        MemoryWatcher::new(self.workspace.clone(), self.db_path.clone(), self.config.clone())
     }
 
     /// Generate embeddings for chunks that don't have them
