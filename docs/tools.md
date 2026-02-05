@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 13
 ---
 
 # Agent Tools
@@ -15,7 +15,7 @@ LocalGPT's agent has access to 7 built-in tools for interacting with your system
 | `write_file` | Create or overwrite files |
 | `edit_file` | Make targeted edits to files |
 | `memory_search` | Search the memory index |
-| `memory_append` | Add content to today's log |
+| `memory_get` | Read specific content from memory files |
 | `web_fetch` | Fetch content from URLs |
 
 ## bash
@@ -154,30 +154,33 @@ Search the memory index for relevant content.
 - Relevance scores
 - Surrounding context
 
-## memory_append
+## memory_get
 
-Append content to today's daily log.
+Read specific content from memory files. Use after `memory_search` to pull only the needed lines.
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `content` | string | Markdown content to append |
+| `path` | string | Path to memory file (MEMORY.md or memory/*.md) |
+| `start_line` | integer | Line number to start from (optional) |
+| `end_line` | integer | Line number to end at (optional) |
 
 **Example:**
 ```json
 {
-  "name": "memory_append",
+  "name": "memory_get",
   "arguments": {
-    "content": "## 14:30 - API Design\nDecided on REST endpoints for the new feature:\n- GET /api/users\n- POST /api/users"
+    "path": "memory/2024-01-15.md",
+    "start_line": 10,
+    "end_line": 25
   }
 }
 ```
 
 **Notes:**
-- Appends to `memory/YYYY-MM-DD.md`
-- Creates the file if it doesn't exist
-- Content should be valid markdown
-- Include timestamps for organization
+- Safe snippet read from memory files
+- Use line ranges to keep context small
+- Works with MEMORY.md and daily logs
 
 ## web_fetch
 

@@ -73,11 +73,15 @@ When in interactive chat mode, these commands are available:
 |---------|-------------|
 | `/help` | Show help for chat commands |
 | `/quit` or `/exit` | Exit the chat session |
+| `/new` | Start a fresh session |
 | `/memory <query>` | Search memory for a term |
 | `/save` | Force save current context to memory |
 | `/compact` | Manually trigger session compaction |
 | `/status` | Show session status (tokens, turns) |
 | `/clear` | Clear the terminal screen |
+| `/skills` | List available skills |
+
+Additionally, any installed skills can be invoked via `/skill-name` (e.g., `/commit`, `/github-pr`). See [Skills System](/docs/skills) for details.
 
 ## Exit Codes
 

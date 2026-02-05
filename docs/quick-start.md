@@ -6,13 +6,27 @@ sidebar_position: 3
 
 This guide will get you chatting with LocalGPT in just a few minutes.
 
-## 1. Set Up Your API Key
+## 1. Configure a Model Provider
+
+Choose one of the following options:
+
+### Option A: Claude CLI (Recommended)
+
+If you have the [Claude CLI](https://claude.ai/code) installed and authenticated:
+
+```bash
+# No additional setup needed! LocalGPT uses your Claude CLI auth.
+# Just start chatting with:
+localgpt chat
+```
+
+### Option B: API Keys
 
 ```bash
 # For OpenAI
 export OPENAI_API_KEY="sk-..."
 
-# For Anthropic
+# For Anthropic API
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
@@ -126,4 +140,5 @@ Goodbye!
 
 - Learn about [CLI Commands](/docs/cli-commands)
 - Understand the [Memory System](/docs/memory-system)
+- Set up [Skills](/docs/skills) for specialized tasks
 - Configure [Heartbeat](/docs/heartbeat) for autonomous tasks

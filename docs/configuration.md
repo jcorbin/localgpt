@@ -1,5 +1,5 @@
 ---
-sidebar_position: 12
+sidebar_position: 14
 ---
 
 # Configuration
@@ -33,8 +33,12 @@ EOF
 
 [agent]
 # Default model to use for chat
-# Prefix determines provider: gpt-* → OpenAI, claude-* → Anthropic, else → Ollama
-default_model = "gpt-4"
+# Prefix determines provider:
+#   claude-cli/* → Claude CLI (uses installed claude command)
+#   gpt-* / o1-* → OpenAI
+#   claude-* → Anthropic API
+#   else → Ollama
+default_model = "claude-cli/opus"
 
 # Context window size (in tokens)
 # Common values: 128000 (GPT-4), 200000 (Claude), 8192 (older models)
@@ -187,6 +191,17 @@ default_model = "claude-3-opus-20240229"  # or claude-3-sonnet, claude-3-haiku
 api_key = "${ANTHROPIC_API_KEY}"
 ```
 
+### Claude CLI
+
+If you have the `claude` CLI installed, LocalGPT can use it directly:
+
+```toml
+[agent]
+default_model = "claude-cli/opus"  # or claude-cli/sonnet, claude-cli/haiku
+```
+
+No API key configuration needed - uses your existing Claude CLI authentication.
+
 ### Ollama (Local)
 
 ```toml
@@ -208,6 +223,26 @@ localgpt config show
 ```
 
 This displays the loaded configuration with sensitive values masked.
+
+## Workspace Path Customization
+
+LocalGPT supports multiple workspaces via environment variables (OpenClaw-compatible):
+
+```bash
+# Use a custom workspace directory (absolute path)
+export LOCALGPT_WORKSPACE=~/my-project/ai-workspace
+localgpt chat
+
+# Use profile-based workspaces
+export LOCALGPT_PROFILE=work    # uses ~/.localgpt/workspace-work
+export LOCALGPT_PROFILE=home    # uses ~/.localgpt/workspace-home
+```
+
+Resolution order:
+1. `LOCALGPT_WORKSPACE` env var (absolute path override)
+2. `LOCALGPT_PROFILE` env var (creates `~/.localgpt/workspace-{profile}`)
+3. `memory.workspace` from config file
+4. Default: `~/.localgpt/workspace`
 
 ## Configuration Precedence
 

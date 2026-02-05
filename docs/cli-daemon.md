@@ -18,14 +18,18 @@ localgpt daemon <SUBCOMMAND>
 |------------|-------------|
 | `start` | Start the daemon |
 | `stop` | Stop a running daemon |
+| `restart` | Restart the daemon (stop then start) |
 | `status` | Check daemon status |
 | `heartbeat` | Run a single heartbeat cycle |
 
 ## Starting the Daemon
 
 ```bash
-# Start in foreground (logs to stdout)
+# Start in background (default, daemonizes on Unix)
 localgpt daemon start
+
+# Start in foreground (logs to stdout, useful for debugging)
+localgpt daemon start --foreground
 
 # The daemon will:
 # 1. Start the HTTP server on configured port
@@ -63,6 +67,16 @@ Memory: 42 files indexed
 
 ```bash
 localgpt daemon stop
+```
+
+## Restarting the Daemon
+
+```bash
+# Restart in background
+localgpt daemon restart
+
+# Restart in foreground
+localgpt daemon restart --foreground
 ```
 
 ## Manual Heartbeat

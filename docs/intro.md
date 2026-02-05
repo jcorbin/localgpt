@@ -11,7 +11,8 @@ LocalGPT is a **local-only AI assistant** written in Rust with persistent markdo
 
 - **Local-Only Operation** - All data stays on your machine. No cloud storage, no telemetry.
 - **Persistent Memory** - Markdown-based knowledge store with SQLite FTS5 full-text search
-- **Multi-Provider Support** - Works with OpenAI, Anthropic Claude, and local Ollama models
+- **Multi-Provider Support** - Works with Claude CLI, OpenAI, Anthropic API, and local Ollama models
+- **Skills System** - Extensible skills for specialized tasks (commits, PRs, code review)
 - **Autonomous Heartbeat** - Schedule background tasks that run automatically
 - **Session Management** - Automatic context compaction to handle long conversations
 - **HTTP API** - RESTful API for integration with other tools
@@ -43,9 +44,10 @@ LocalGPT automatically detects the provider based on model name prefix:
 
 | Prefix | Provider | Examples |
 |--------|----------|----------|
+| `claude-cli/*` | Claude CLI | claude-cli/opus, claude-cli/sonnet |
 | `gpt-*` | OpenAI | gpt-4, gpt-4-turbo, gpt-3.5-turbo |
 | `o1-*` | OpenAI | o1-preview, o1-mini |
-| `claude-*` | Anthropic | claude-3-opus, claude-3-sonnet |
+| `claude-*` | Anthropic API | claude-3-opus, claude-3-sonnet |
 | Other | Ollama | llama3, mistral, codellama |
 
 ## Next Steps
@@ -53,3 +55,4 @@ LocalGPT automatically detects the provider based on model name prefix:
 - [Installation](/docs/installation) - Install LocalGPT on your system
 - [Quick Start](/docs/quick-start) - Get up and running in minutes
 - [CLI Commands](/docs/cli-commands) - Learn the available commands
+- [Skills System](/docs/skills) - Create and use specialized skills
