@@ -374,41 +374,22 @@ impl MemoryManager {
             info!("Removed {} deleted files from index", files_removed);
         }
 
-        // Index MEMORY.md
-        let memory_file = self.workspace.join("MEMORY.md");
-        if memory_file.exists() {
-            stats.files_processed += 1;
-            if self.index.index_file(&memory_file, force)? {
-                stats.files_updated += 1;
-            }
-        }
-
-        // Index HEARTBEAT.md
-        let heartbeat_file = self.workspace.join("HEARTBEAT.md");
-        if heartbeat_file.exists() {
-            stats.files_processed += 1;
-            if self.index.index_file(&heartbeat_file, force)? {
-                stats.files_updated += 1;
-            }
-        }
-
-        // Index daily logs
-        let memory_dir = self.workspace.join("memory");
-        if memory_dir.exists() {
-            for entry in fs::read_dir(&memory_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-
-                if path.extension().map(|e| e == "md").unwrap_or(false) {
-                    stats.files_processed += 1;
-                    if self.index.index_file(&path, force)? {
-                        stats.files_updated += 1;
-                    }
+        // Index all .md files recursively under workspace
+        let pattern = format!("{}/**/*.md", self.workspace.display());
+        for entry in glob::glob(&pattern)
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r.ok())
+        {
+            if entry.is_file() {
+                stats.files_processed += 1;
+                if self.index.index_file(&entry, force)? {
+                    stats.files_updated += 1;
                 }
             }
         }
 
-        // Index configured paths (e.g., knowledge/)
+        // Index configured external paths (outside workspace)
         for index_path in &self.config.paths {
             let base_path = if index_path.path.starts_with('~') || index_path.path.starts_with('/')
             {
@@ -417,13 +398,18 @@ impl MemoryManager {
                 self.workspace.join(&index_path.path)
             };
 
+            // Skip paths inside workspace (already covered by recursive glob above)
+            if base_path.starts_with(&self.workspace) {
+                continue;
+            }
+
             if !base_path.exists() {
                 debug!("Skipping non-existent index path: {}", base_path.display());
                 continue;
             }
 
             let pattern = format!("{}/{}", base_path.display(), index_path.pattern);
-            debug!("Indexing path with pattern: {}", pattern);
+            debug!("Indexing external path with pattern: {}", pattern);
 
             for entry in glob::glob(&pattern)
                 .into_iter()
@@ -468,55 +454,33 @@ impl MemoryManager {
         let mut files = Vec::new();
         let mut total_chunks = 0;
 
-        // Get stats for each file
-        let memory_file = self.workspace.join("MEMORY.md");
-        if memory_file.exists() {
-            let content = fs::read_to_string(&memory_file)?;
-            let lines = content.lines().count();
-            let chunks = self.index.file_chunk_count(&memory_file)?;
-            total_chunks += chunks;
-            files.push(FileStats {
-                name: "MEMORY.md".to_string(),
-                chunks,
-                lines,
-            });
-        }
+        // Get stats for all .md files recursively under workspace
+        let pattern = format!("{}/**/*.md", self.workspace.display());
+        for entry in glob::glob(&pattern)
+            .into_iter()
+            .flatten()
+            .filter_map(|r| r.ok())
+        {
+            if entry.is_file() {
+                let content = fs::read_to_string(&entry)?;
+                let lines = content.lines().count();
+                let chunks = self.index.file_chunk_count(&entry)?;
+                total_chunks += chunks;
 
-        let heartbeat_file = self.workspace.join("HEARTBEAT.md");
-        if heartbeat_file.exists() {
-            let content = fs::read_to_string(&heartbeat_file)?;
-            let lines = content.lines().count();
-            let chunks = self.index.file_chunk_count(&heartbeat_file)?;
-            total_chunks += chunks;
-            files.push(FileStats {
-                name: "HEARTBEAT.md".to_string(),
-                chunks,
-                lines,
-            });
-        }
+                let display_name = entry
+                    .strip_prefix(&self.workspace)
+                    .map(|rel| rel.display().to_string())
+                    .unwrap_or_else(|_| entry.display().to_string());
 
-        // Daily logs
-        let memory_dir = self.workspace.join("memory");
-        if memory_dir.exists() {
-            for entry in fs::read_dir(&memory_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-
-                if path.extension().map(|e| e == "md").unwrap_or(false) {
-                    let content = fs::read_to_string(&path)?;
-                    let lines = content.lines().count();
-                    let chunks = self.index.file_chunk_count(&path)?;
-                    total_chunks += chunks;
-                    files.push(FileStats {
-                        name: format!("memory/{}", path.file_name().unwrap().to_string_lossy()),
-                        chunks,
-                        lines,
-                    });
-                }
+                files.push(FileStats {
+                    name: display_name,
+                    chunks,
+                    lines,
+                });
             }
         }
 
-        // Configured paths (e.g., knowledge/)
+        // Configured external paths (outside workspace)
         for index_path in &self.config.paths {
             let base_path = if index_path.path.starts_with('~') || index_path.path.starts_with('/')
             {
@@ -524,6 +488,11 @@ impl MemoryManager {
             } else {
                 self.workspace.join(&index_path.path)
             };
+
+            // Skip paths inside workspace (already covered above)
+            if base_path.starts_with(&self.workspace) {
+                continue;
+            }
 
             if !base_path.exists() {
                 continue;
@@ -542,10 +511,7 @@ impl MemoryManager {
                     let chunks = self.index.file_chunk_count(&entry)?;
                     total_chunks += chunks;
 
-                    // Show path relative to workspace if possible, otherwise use relative to base_path
-                    let display_name = if let Ok(rel) = entry.strip_prefix(&self.workspace) {
-                        rel.display().to_string()
-                    } else if let Ok(rel) = entry.strip_prefix(&base_path) {
+                    let display_name = if let Ok(rel) = entry.strip_prefix(&base_path) {
                         format!("{}/{}", index_path.path, rel.display())
                     } else {
                         entry.display().to_string()

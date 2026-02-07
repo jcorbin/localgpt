@@ -14,6 +14,30 @@ use localgpt::concurrency::WorkspaceLock;
 use localgpt::config::Config;
 use localgpt::memory::MemoryManager;
 
+/// Adjust a byte index to the nearest valid UTF-8 char boundary (searching forward).
+fn floor_char_boundary(s: &str, index: usize) -> usize {
+    if index >= s.len() {
+        return s.len();
+    }
+    let mut i = index;
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+/// Adjust a byte index to the nearest valid UTF-8 char boundary (searching forward).
+fn ceil_char_boundary(s: &str, index: usize) -> usize {
+    if index >= s.len() {
+        return s.len();
+    }
+    let mut i = index;
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
+}
+
 /// Extract a snippet from content, centered around the query match
 fn extract_snippet(content: &str, query: &str, max_len: usize) -> String {
     // Normalize content: collapse whitespace and newlines
@@ -26,8 +50,11 @@ fn extract_snippet(content: &str, query: &str, max_len: usize) -> String {
     if let Some(pos) = lower_content.find(&lower_query) {
         // Center the snippet around the match
         let half_len = max_len / 2;
-        let start = pos.saturating_sub(half_len);
-        let end = (pos + query.len() + half_len).min(normalized.len());
+        let start = floor_char_boundary(&normalized, pos.saturating_sub(half_len));
+        let end = ceil_char_boundary(
+            &normalized,
+            (pos + query.len() + half_len).min(normalized.len()),
+        );
 
         // Adjust to word boundaries
         let mut snippet_start = start;
