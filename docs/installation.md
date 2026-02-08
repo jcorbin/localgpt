@@ -12,6 +12,16 @@ sidebar_position: 2
   - Anthropic API key
   - Local Ollama installation
 
+## Install from crates.io
+
+```bash
+# Full install (includes desktop GUI)
+cargo install localgpt
+
+# Headless install (no desktop GUI — for servers, Docker, CI)
+cargo install localgpt --no-default-features
+```
+
 ## Building from Source
 
 ```bash
@@ -19,11 +29,37 @@ sidebar_position: 2
 git clone https://github.com/localgpt-app/localgpt.git
 cd localgpt
 
-# Build release binary
+# Build release binary (includes desktop GUI)
 cargo build --release
+
+# Build headless (no desktop GUI — skips eframe/egui/winit)
+cargo build --release --no-default-features
 
 # The binary will be at target/release/localgpt
 ```
+
+## Docker / Headless Server
+
+For Docker or headless environments where display servers (X11/Wayland) are unavailable, build without the desktop feature to avoid `winit` compilation issues:
+
+```bash
+cargo build --release --no-default-features
+```
+
+Or in a Dockerfile:
+
+```dockerfile
+FROM rust:1.83 AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release --no-default-features
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/localgpt /usr/local/bin/
+CMD ["localgpt", "daemon", "start", "--foreground"]
+```
+
+The headless binary includes all features except the desktop GUI: CLI, web UI, HTTP API, WebSocket, daemon mode, and heartbeat.
 
 ## Installation
 

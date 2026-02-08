@@ -32,9 +32,10 @@ const FeatureList: FeatureItem[] = [
     title: 'Desktop, Web & CLI',
     description: (
       <>
-        Three ways to interact: a native desktop GUI (egui), an embedded web
-        UI served from the binary, and a full-featured CLI with readline
-        support. Plus an HTTP API and WebSocket for integrations.
+        Three ways to interact: an optional native desktop GUI (egui), an
+        embedded web UI served from the binary, and a full-featured CLI. Build
+        with <code>--no-default-features</code> for headless Docker/server
+        deployments.
       </>
     ),
   },

@@ -11,7 +11,7 @@ LocalGPT is a **local AI assistant with persistent memory, semantic search, and 
 
 - **Local & Private** - Single ~27MB Rust binary. All data stays on your machine. No cloud storage, no telemetry.
 - **Hybrid Memory Search** - Markdown-based knowledge store with SQLite FTS5 full-text search and local vector embeddings (fastembed) for semantic search
-- **Desktop App** - Native desktop GUI built with egui — chat, sessions, memory browser, and status dashboard
+- **Desktop App** - Optional native desktop GUI built with egui — chat, sessions, memory browser, and status dashboard. Disable with `--no-default-features` for headless/Docker deployments.
 - **Embedded Web UI** - Browser-based chat interface served directly from the binary
 - **Multi-Provider Support** - Works with Claude CLI, Anthropic API, OpenAI, and local Ollama models
 - **Autonomous Heartbeat** - Daemon mode with scheduled background tasks that run automatically
