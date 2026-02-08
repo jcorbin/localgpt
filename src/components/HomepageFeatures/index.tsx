@@ -9,32 +9,62 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Local Device Focused',
+    title: 'Local & Private',
     description: (
       <>
-        All your data stays on your machine. No cloud dependencies, no data
-        leaving your system. Complete privacy and control over your AI
-        conversations and memory.
+        Single Rust binary, ~27MB. All data stays on your machine — markdown
+        files, SQLite indexes, and local embeddings. No cloud storage, no
+        telemetry. Just <code>cargo install localgpt</code>.
       </>
     ),
   },
   {
-    title: 'Persistent Memory System',
+    title: 'Hybrid Memory Search',
     description: (
       <>
-        Markdown-based memory with SQLite FTS5 full-text search. Your AI
-        remembers context across sessions with daily logs, curated knowledge,
-        and automatic indexing.
+        Persistent markdown-based memory with hybrid search — SQLite FTS5 for
+        keyword matching and local vector embeddings (fastembed) for semantic
+        search. Your AI remembers and finds context across sessions.
       </>
     ),
   },
   {
-    title: 'Multi-Provider Support',
+    title: 'Desktop, Web & CLI',
     description: (
       <>
-        Connect to OpenAI, Anthropic Claude, or local Ollama models. Switch
-        providers seamlessly while keeping your memory and conversation
-        history intact.
+        Three ways to interact: a native desktop GUI (egui), an embedded web
+        UI served from the binary, and a full-featured CLI with readline
+        support. Plus an HTTP API and WebSocket for integrations.
+      </>
+    ),
+  },
+  {
+    title: 'Autonomous Heartbeat',
+    description: (
+      <>
+        Run LocalGPT as a daemon and it checks HEARTBEAT.md on a schedule —
+        executing tasks, organizing knowledge, and reminding you of deadlines,
+        all while you're away.
+      </>
+    ),
+  },
+  {
+    title: 'Multi-Provider LLMs',
+    description: (
+      <>
+        Works with Claude CLI, Anthropic API, OpenAI, and local Ollama
+        models. Switch providers seamlessly while keeping your memory and
+        conversation history intact.
+      </>
+    ),
+  },
+  {
+    title: 'Security Built In',
+    description: (
+      <>
+        Prompt injection defenses with a dedicated sanitization module,
+        tool approval mode for dangerous operations, content delimiters,
+        and workspace locking for safe concurrent access.
       </>
     ),
   },

@@ -5,17 +5,20 @@ slug: /intro
 
 # Introduction
 
-LocalGPT is a **local device focused AI assistant with persistent memory and continuous operation capabilities** (or reshaped OpenClaw in Rust). It provides a command-line interface for interacting with various LLM providers while keeping all your data on your local machine.
+LocalGPT is a **local AI assistant with persistent memory, semantic search, and autonomous operation** — built in Rust, inspired by OpenClaw. A single ~27MB binary gives you a CLI, desktop app, embedded web UI, and HTTP API — all keeping your data on your machine.
 
 ## Key Features
 
-- **Local Device Focused** - All data stays on your machine. No cloud storage, no telemetry.
-- **Persistent Memory** - Markdown-based knowledge store with SQLite FTS5 full-text search
-- **Multi-Provider Support** - Works with Claude CLI, OpenAI, Anthropic API, and local Ollama models
-- **Skills System** - Extensible skills for specialized tasks (commits, PRs, code review)
-- **Autonomous Heartbeat** - Schedule background tasks that run automatically
-- **Session Management** - Automatic context compaction to handle long conversations
-- **HTTP API** - RESTful API for integration with other tools
+- **Local & Private** - Single ~27MB Rust binary. All data stays on your machine. No cloud storage, no telemetry.
+- **Hybrid Memory Search** - Markdown-based knowledge store with SQLite FTS5 full-text search and local vector embeddings (fastembed) for semantic search
+- **Desktop App** - Native desktop GUI built with egui — chat, sessions, memory browser, and status dashboard
+- **Embedded Web UI** - Browser-based chat interface served directly from the binary
+- **Multi-Provider Support** - Works with Claude CLI, Anthropic API, OpenAI, and local Ollama models
+- **Autonomous Heartbeat** - Daemon mode with scheduled background tasks that run automatically
+- **Skills System** - Extensible skills for specialized tasks
+- **Security** - Prompt injection defenses, tool approval mode, content sanitization, and workspace locking
+- **Session Management** - Multi-session support with automatic context compaction
+- **HTTP API & WebSocket** - RESTful API and real-time WebSocket for integrations
 
 ## Architecture Overview
 
@@ -45,9 +48,9 @@ LocalGPT automatically detects the provider based on model name prefix:
 | Prefix | Provider | Examples |
 |--------|----------|----------|
 | `claude-cli/*` | Claude CLI | claude-cli/opus, claude-cli/sonnet |
-| `gpt-*` | OpenAI | gpt-4, gpt-4-turbo, gpt-3.5-turbo |
-| `o1-*` | OpenAI | o1-preview, o1-mini |
-| `claude-*` | Anthropic API | claude-3-opus, claude-3-sonnet |
+| `anthropic/*` | Anthropic API | anthropic/claude-opus-4-5, anthropic/claude-sonnet-4-5 |
+| `openai/*` | OpenAI | openai/gpt-4o, openai/gpt-4o-mini |
+| Aliases | Any | opus, sonnet, gpt, gpt-mini |
 | Other | Ollama | llama3, mistral, codellama |
 
 ## Next Steps

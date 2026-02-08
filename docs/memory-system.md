@@ -11,8 +11,10 @@ LocalGPT features a persistent, markdown-based memory system that allows the AI 
 The memory system consists of:
 
 1. **Markdown Files** - Human-readable storage in `~/.localgpt/workspace/`
-2. **SQLite FTS5 Index** - Fast full-text search without embeddings
-3. **File Watcher** - Automatic reindexing when files change
+2. **SQLite FTS5 Index** - Fast full-text keyword search using BM25 scoring
+3. **Vector Embeddings** - Local semantic search via fastembed (or OpenAI/GGUF embeddings) using sqlite-vec
+4. **Hybrid Search** - Combines FTS5 and vector search results (30% keyword, 70% semantic) for best recall
+5. **File Watcher** - Automatic reindexing when files change
 
 ## File Structure
 
@@ -88,8 +90,9 @@ Designed REST endpoints for the chat API:
 ### How It Works
 
 1. **Chunking** - Files are split into chunks (~400 tokens with 80 token overlap)
-2. **Indexing** - Chunks are stored in SQLite FTS5 for fast keyword search
-3. **Scoring** - Results are ranked by relevance using BM25 algorithm
+2. **FTS5 Indexing** - Chunks are stored in SQLite FTS5 for fast keyword search, scored by BM25
+3. **Embedding Generation** - Chunks are embedded using a local model (fastembed by default — no API key needed) and stored in sqlite-vec for vector similarity search
+4. **Hybrid Scoring** - Search results combine FTS5 (30% weight) and vector similarity (70% weight) for best results
 
 ### Automatic Indexing
 
@@ -132,6 +135,18 @@ chunk_size = 400
 
 # Overlap between chunks (in tokens)
 chunk_overlap = 80
+
+# Embedding provider: "local" (fastembed), "openai", "gguf", or "none"
+embedding_provider = "local"
+
+# Embedding model (for fastembed)
+embedding_model = "BAAI/bge-small-en-v1.5"
+
+# Cache directory for embedding models
+embedding_cache_dir = "~/.localgpt/cache/embeddings"
+
+# Additional paths to index (outside workspace)
+# external_paths = ["~/projects/notes"]
 ```
 
 ## Tools

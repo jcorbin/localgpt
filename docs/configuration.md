@@ -14,10 +14,7 @@ Create the config file:
 mkdir -p ~/.localgpt
 cat > ~/.localgpt/config.toml << 'EOF'
 [agent]
-default_model = "gpt-4"
-
-[providers.openai]
-api_key = "${OPENAI_API_KEY}"
+default_model = "claude-cli/opus"
 EOF
 ```
 
@@ -110,8 +107,21 @@ chunk_size = 400
 # Ensures context isn't lost at chunk boundaries
 chunk_overlap = 80
 
-# Embedding model for semantic search (future feature)
-embedding_model = "text-embedding-3-small"
+# Embedding provider for semantic search
+# Options: "local" (fastembed), "openai", "gguf", "none"
+embedding_provider = "local"
+
+# Embedding model
+# For "local": "BAAI/bge-small-en-v1.5" (default), or multilingual models
+# For "openai": "text-embedding-3-small"
+# For "gguf": path to .gguf file
+embedding_model = "BAAI/bge-small-en-v1.5"
+
+# Cache directory for downloaded embedding models
+embedding_cache_dir = "~/.localgpt/cache/embeddings"
+
+# Additional paths to index (outside workspace)
+# external_paths = ["~/projects/notes"]
 
 #──────────────────────────────────────────────────────────────────────────────
 # HTTP Server Settings
@@ -122,7 +132,7 @@ embedding_model = "text-embedding-3-small"
 enabled = true
 
 # Port to listen on
-port = 18790
+port = 31327
 
 # Bind address
 # "127.0.0.1" = localhost only (secure)
@@ -175,7 +185,7 @@ export OPENAI_API_KEY="sk-..."
 
 ```toml
 [agent]
-default_model = "gpt-4"  # or gpt-4-turbo, gpt-3.5-turbo, o1-preview
+default_model = "openai/gpt-4o"  # or openai/gpt-4o-mini, or alias: gpt
 
 [providers.openai]
 api_key = "${OPENAI_API_KEY}"
@@ -185,7 +195,7 @@ api_key = "${OPENAI_API_KEY}"
 
 ```toml
 [agent]
-default_model = "claude-3-opus-20240229"  # or claude-3-sonnet, claude-3-haiku
+default_model = "anthropic/claude-opus-4-5"  # or anthropic/claude-sonnet-4-5, or alias: opus
 
 [providers.anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
