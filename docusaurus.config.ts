@@ -4,8 +4,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'LocalGPT',
-  tagline: 'A local device focused AI assistant with persistent memory and continuous operation capabilities (or reshaped OpenClaw in Rust)',
-  favicon: 'img/favicon.ico',
+  tagline: 'A local AI assistant with persistent markdown memory, autonomous heartbeat tasks, and semantic search. Single binary, no runtime dependencies.',
+  // favicon: 'img/favicon.ico',
 
   url: 'https://localgpt.app',
   baseUrl: '/',
