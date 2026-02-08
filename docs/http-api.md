@@ -12,7 +12,7 @@ LocalGPT provides a RESTful HTTP API when running in daemon mode.
 localgpt daemon start
 ```
 
-The server listens on `http://127.0.0.1:18790` by default.
+The server listens on `http://127.0.0.1:31327` by default.
 
 ## Endpoints
 
@@ -221,7 +221,7 @@ Configure the HTTP server in `config.toml`:
 ```toml
 [server]
 enabled = true
-port = 18790
+port = 31327
 bind = "127.0.0.1"
 ```
 
@@ -231,36 +231,48 @@ bind = "127.0.0.1"
 
 **Health check:**
 ```bash
-curl http://localhost:18790/health
+curl http://localhost:31327/health
 ```
 
 **Send a chat message:**
 ```bash
-curl -X POST http://localhost:18790/api/chat \
+curl -X POST http://localhost:31327/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello, how are you?"}'
 ```
 
 **Search memory:**
 ```bash
-curl "http://localhost:18790/api/memory/search?q=rust"
+curl "http://localhost:31327/api/memory/search?q=rust"
 ```
 
-## Limitations
+## Sessions
 
-The current HTTP API has some limitations:
+The API supports multi-turn conversations with session persistence:
 
-1. **Stateless** - Each request creates a new agent (no session persistence)
-2. **No streaming** - Responses are returned all at once
-3. **No authentication** - Rely on network security (localhost binding)
+```bash
+# Create a session
+curl -X POST http://localhost:31327/api/sessions
 
-For multi-turn conversations with session persistence, use the CLI `chat` command.
+# Stream a chat message in a session
+curl -X POST http://localhost:31327/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "...", "message": "Hello!"}'
 
-## Future Enhancements
+# List sessions
+curl http://localhost:31327/api/sessions
 
-Planned API improvements:
+# Delete a session
+curl -X DELETE http://localhost:31327/api/sessions/<id>
+```
 
-- Session-based chat with `/api/sessions`
-- Server-Sent Events (SSE) for streaming
-- WebSocket support
-- API key authentication
+## Streaming & WebSocket
+
+- **SSE Streaming** — `POST /api/chat/stream` returns Server-Sent Events for real-time responses
+- **WebSocket** — `GET /api/ws` for bidirectional real-time chat
+
+## Security Notes
+
+- Default bind `127.0.0.1` only accepts local connections
+- No API key authentication — rely on network security (localhost binding)
+- Tool approval mode available for dangerous operations
