@@ -1800,7 +1800,7 @@ impl Agent {
 
     fn stream_with_tool_loop(&mut self) -> impl futures::Stream<Item = Result<StreamEvent>> + '_ {
         async_stream::stream! {
-            let max_tool_iterations = 10;
+            let max_tool_iterations = 100;
             let mut iteration = 0;
 
             loop {
