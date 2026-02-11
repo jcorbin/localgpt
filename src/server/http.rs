@@ -781,12 +781,13 @@ async fn chat_stream(
                             let data = json!({"type": "tool_start", "name": name, "id": id, "detail": detail});
                             yield Ok(Event::default().data(data.to_string()));
                         }
-                        Ok(StreamEvent::ToolCallEnd { name, id, output }) => {
+                        Ok(StreamEvent::ToolCallEnd { name, id, output, warnings }) => {
                             let data = json!({
                                 "type": "tool_end",
                                 "name": name,
                                 "id": id,
-                                "output": output.chars().take(500).collect::<String>()
+                                "output": output.chars().take(500).collect::<String>(),
+                                "warnings": warnings
                             });
                             yield Ok(Event::default().data(data.to_string()));
                         }

@@ -458,7 +458,15 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
                             .execute_streaming_tool_calls(&full_response, approved_calls)
                             .await
                         {
-                            Ok(follow_up) => {
+                            Ok((follow_up, warnings)) => {
+                                for (tool_name, tool_warnings) in &warnings {
+                                    for w in tool_warnings {
+                                        eprintln!(
+                                            "  \u{26a0} Suspicious content in {} output: {}",
+                                            tool_name, w
+                                        );
+                                    }
+                                }
                                 print!("{}", follow_up);
                                 stdout.flush()?;
                             }

@@ -135,6 +135,7 @@ pub enum StreamEvent {
         name: String,
         id: String,
         output: String,
+        warnings: Vec<String>,
     },
     /// Stream completed
     Done,

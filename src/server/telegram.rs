@@ -707,7 +707,19 @@ async fn handle_chat(
                         let _ = bot.edit_message_text(chat_id, msg_id, &display).await;
                         last_edit = Instant::now();
                     }
-                    Ok(StreamEvent::ToolCallEnd { .. }) => {}
+                    Ok(StreamEvent::ToolCallEnd { name, warnings, .. }) => {
+                        if !warnings.is_empty() {
+                            for w in &warnings {
+                                tool_info.push_str(&format!(
+                                    "\u{26a0} Suspicious content in {}: {}\n",
+                                    name, w
+                                ));
+                            }
+                            let display = format_display(&full_response, &tool_info);
+                            let _ = bot.edit_message_text(chat_id, msg_id, &display).await;
+                            last_edit = Instant::now();
+                        }
+                    }
                     Ok(StreamEvent::Done) => break,
                     Err(e) => {
                         error!("Stream error: {}", e);

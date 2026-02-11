@@ -146,11 +146,17 @@ async fn worker_loop(
                                             });
                                         }
                                     }
-                                    StreamEvent::ToolCallEnd { name, id, output } => {
+                                    StreamEvent::ToolCallEnd {
+                                        name,
+                                        id,
+                                        output,
+                                        warnings,
+                                    } => {
                                         let _ = tx.send(WorkerMessage::ToolCallEnd {
                                             name,
                                             id,
                                             output,
+                                            warnings,
                                         });
                                     }
                                     StreamEvent::Done => {

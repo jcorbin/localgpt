@@ -442,9 +442,13 @@ impl Agent {
                     );
 
                     let result = self.execute_tool(call).await;
+                    let output = match result {
+                        Ok((content, _warnings)) => content,
+                        Err(e) => format!("Error: {}", e),
+                    };
                     results.push(ToolResult {
                         call_id: call.id.clone(),
-                        output: result.unwrap_or_else(|e| format!("Error: {}", e)),
+                        output,
                     });
                 }
 
@@ -482,7 +486,7 @@ impl Agent {
         }
     }
 
-    async fn execute_tool(&self, call: &ToolCall) -> Result<String> {
+    async fn execute_tool(&self, call: &ToolCall) -> Result<(String, Vec<String>)> {
         for tool in &self.tools {
             if tool.name() == call.name {
                 let raw_output = tool.execute(&call.arguments).await?;
@@ -505,10 +509,10 @@ impl Agent {
                         );
                     }
 
-                    return Ok(result.content);
+                    return Ok((result.content, result.warnings));
                 }
 
-                return Ok(raw_output);
+                return Ok((raw_output, Vec::new()));
             }
         }
         anyhow::bail!("Unknown tool: {}", call.name)
@@ -921,12 +925,12 @@ impl Agent {
     }
 
     /// Execute tool calls that were accumulated during streaming
-    /// Returns the final response after tool execution
+    /// Returns (final_response, Vec<(tool_name, warnings)>)
     pub async fn execute_streaming_tool_calls(
         &mut self,
         text_response: &str,
         tool_calls: Vec<ToolCall>,
-    ) -> Result<String> {
+    ) -> Result<(String, Vec<(String, Vec<String>)>)> {
         // Add assistant message with tool calls
         self.session.add_message(Message {
             role: Role::Assistant,
@@ -938,6 +942,7 @@ impl Agent {
 
         // Execute each tool and collect results
         let mut results = Vec::new();
+        let mut all_warnings: Vec<(String, Vec<String>)> = Vec::new();
         for call in &tool_calls {
             debug!(
                 "Executing tool: {} with args: {}",
@@ -945,9 +950,16 @@ impl Agent {
             );
 
             let result = self.execute_tool(call).await;
+            let (output, warnings) = match result {
+                Ok((content, warnings)) => (content, warnings),
+                Err(e) => (format!("Error: {}", e), Vec::new()),
+            };
+            if !warnings.is_empty() {
+                all_warnings.push((call.name.clone(), warnings));
+            }
             results.push(ToolResult {
                 call_id: call.id.clone(),
-                output: result.unwrap_or_else(|e| format!("Error: {}", e)),
+                output,
             });
         }
 
@@ -982,7 +994,7 @@ impl Agent {
             images: Vec::new(),
         });
 
-        Ok(final_response)
+        Ok((final_response, all_warnings))
     }
 
     /// Get a reference to the LLM provider for streaming
@@ -1109,12 +1121,16 @@ impl Agent {
 
                             // Execute tool
                             let result = self.execute_tool(call).await;
-                            let output = result.unwrap_or_else(|e| format!("Error: {}", e));
+                            let (output, warnings) = match result {
+                                Ok((content, warnings)) => (content, warnings),
+                                Err(e) => (format!("Error: {}", e), Vec::new()),
+                            };
 
                             yield Ok(StreamEvent::ToolCallEnd {
                                 name: call.name.clone(),
                                 id: call.id.clone(),
                                 output: output.clone(),
+                                warnings,
                             });
 
                             // Add tool result to session
