@@ -20,6 +20,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Security',
+      items: ['sandbox', 'security-policy'],
+    },
+    {
+      type: 'category',
       label: 'Reference',
       items: ['configuration', 'http-api'],
     },

@@ -93,12 +93,12 @@ const config: Config = {
               to: '/docs/memory-system',
             },
             {
-              label: 'Heartbeat',
-              to: '/docs/heartbeat',
+              label: 'Shell Sandbox',
+              to: '/docs/sandbox',
             },
             {
-              label: 'HTTP API',
-              to: '/docs/http-api',
+              label: 'Security Policy',
+              to: '/docs/security-policy',
             },
           ],
         },

@@ -61,12 +61,12 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Security Built In',
+    title: 'Sandboxed & Secure',
     description: (
       <>
-        Prompt injection defenses with a dedicated sanitization module,
-        tool approval mode for dangerous operations, content delimiters,
-        and workspace locking for safe concurrent access.
+        Kernel-enforced shell sandbox (Landlock + seccomp + Seatbelt) on
+        every command — no Docker required. Signed workspace security policies
+        with HMAC tamper detection, protected files, and hash-chained audit logs.
       </>
     ),
   },

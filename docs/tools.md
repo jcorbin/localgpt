@@ -20,7 +20,7 @@ LocalGPT's agent has access to 7 built-in tools for interacting with your system
 
 ## bash
 
-Execute shell commands and return the output.
+Execute shell commands and return the output. All commands run inside the [shell sandbox](/docs/sandbox) by default.
 
 **Parameters:**
 | Name | Type | Description |
@@ -40,9 +40,10 @@ Execute shell commands and return the output.
 ```
 
 **Notes:**
-- Commands run with user permissions
-- Timeout after 60 seconds by default
-- Working directory defaults to home
+- Commands run inside a kernel-enforced sandbox (Landlock + seccomp on Linux, Seatbelt on macOS)
+- Sandbox restricts writes to the workspace directory, blocks network access, and denies credential directories
+- Timeout after 120 seconds by default (configurable via `sandbox.timeout_secs`)
+- Output capped at 1MB (configurable via `sandbox.max_output_bytes`)
 - Tilde (`~`) is expanded automatically
 
 ## read_file
@@ -98,6 +99,8 @@ Create a new file or overwrite an existing one.
 - Creates parent directories if needed
 - Overwrites existing files completely
 - Use `edit_file` for partial changes
+- Writes are restricted to the workspace directory
+- [Protected files](/docs/security-policy#protected-files) (`LocalGPT.md`, `.localgpt_manifest.json`, `IDENTITY.md`) cannot be written
 
 ## edit_file
 
@@ -263,17 +266,9 @@ User: "What files are in my project?"
 
 ## Safety Considerations
 
-- **File operations** are restricted to your user permissions
-- **Commands** run in a standard shell environment
+- **Shell commands** run inside a [kernel-enforced sandbox](/docs/sandbox) — write access limited to workspace, network denied, credentials blocked
+- **File tools** (`write_file`, `edit_file`, `read_file`) are path-validated and restricted to the workspace
+- **Protected files** — the agent cannot write to `LocalGPT.md`, `.localgpt_manifest.json`, or `IDENTITY.md` (see [Security Policy](/docs/security-policy))
 - **No sudo** escalation is performed automatically
-- **Web requests** are outbound only (no server)
+- **Web requests** are outbound only with SSRF protection
 - **Memory** stays entirely local
-
-## Extending Tools
-
-The tool system is designed to be extensible. Future versions may include:
-
-- **git** - Direct git operations
-- **clipboard** - System clipboard access
-- **notifications** - Desktop notifications
-- **calendar** - Calendar integration

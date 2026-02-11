@@ -12,12 +12,15 @@ LocalGPT provides a comprehensive command-line interface with several subcommand
 localgpt <COMMAND>
 
 Commands:
-  chat     Interactive multi-turn conversation
-  ask      Single question and response
-  daemon   Manage the background daemon
-  memory   Memory management operations
-  config   Configuration management
-  help     Print help information
+  chat      Interactive multi-turn conversation
+  ask       Single question and response
+  daemon    Manage the background daemon
+  memory    Memory management operations
+  config    Configuration management
+  security  Security policy management
+  sandbox   Shell sandbox diagnostics
+  desktop   Launch desktop GUI
+  help      Print help information
 ```
 
 ## Global Options
@@ -42,6 +45,9 @@ Options:
 | [`daemon`](/docs/cli-daemon) | Start/stop/status of the background daemon |
 | [`memory`](/docs/cli-memory) | Search, reindex, and manage memory |
 | `config` | Show and validate configuration |
+| [`security`](/docs/security-policy#cli-commands) | Sign, verify, and audit security policy |
+| [`sandbox`](/docs/sandbox#cli-commands) | Inspect sandbox capabilities and run tests |
+| `desktop` | Launch the native desktop GUI (egui) |
 
 ## Examples
 
@@ -63,6 +69,15 @@ localgpt memory search "project ideas"
 
 # Show memory statistics
 localgpt memory stats
+
+# Check sandbox capabilities
+localgpt sandbox status
+
+# Sign security policy after editing
+localgpt security sign
+
+# View security audit log
+localgpt security audit
 ```
 
 ## Built-in Chat Commands

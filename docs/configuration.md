@@ -140,6 +140,49 @@ port = 31327
 bind = "127.0.0.1"
 
 #──────────────────────────────────────────────────────────────────────────────
+# Sandbox Settings
+#──────────────────────────────────────────────────────────────────────────────
+
+[sandbox]
+# Enable kernel-enforced shell sandbox (Landlock + seccomp + Seatbelt)
+enabled = true
+
+# Sandbox level: "auto" detects highest available, or force a specific level
+# Options: "auto", "full", "standard", "minimal", "none"
+level = "auto"
+
+# Kill sandboxed commands after N seconds
+timeout_secs = 120
+
+# Maximum stdout + stderr output from sandboxed commands
+max_output_bytes = 1048576    # 1MB
+
+# Maximum file size a sandboxed command can create
+max_file_size_bytes = 52428800  # 50MB
+
+# Additional paths beyond workspace (escape hatches for power users)
+[sandbox.allow_paths]
+read = []     # e.g., ["/data/datasets"]
+write = []    # e.g., ["/tmp/builds"]
+
+[sandbox.network]
+policy = "deny"   # "deny" or "proxy" (future)
+
+#──────────────────────────────────────────────────────────────────────────────
+# Security Policy Settings
+#──────────────────────────────────────────────────────────────────────────────
+
+[security]
+# Abort session if LocalGPT.md tamper detected? (default: warn only)
+strict_policy = false
+
+# Skip loading LocalGPT.md entirely
+disable_policy = false
+
+# Skip hardcoded security suffix (NOT recommended)
+disable_suffix = false
+
+#──────────────────────────────────────────────────────────────────────────────
 # Logging Settings
 #──────────────────────────────────────────────────────────────────────────────
 
