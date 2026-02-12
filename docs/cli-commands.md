@@ -17,7 +17,7 @@ Commands:
   daemon    Manage the background daemon
   memory    Memory management operations
   config    Configuration management
-  security  Security policy management
+  directives  Manage LocalGPT.md standing instructions
   sandbox   Shell sandbox diagnostics
   desktop   Launch desktop GUI
   help      Print help information
@@ -45,7 +45,7 @@ Options:
 | [`daemon`](/docs/cli-daemon) | Start/stop/status of the background daemon |
 | [`memory`](/docs/cli-memory) | Search, reindex, and manage memory |
 | `config` | Show and validate configuration |
-| [`security`](/docs/security-policy#cli-commands) | Sign, verify, and audit security policy |
+| [`directives`](/docs/localgpt#quick-reference) | Sign, verify, and audit LocalGPT.md |
 | [`sandbox`](/docs/sandbox#cli-commands) | Inspect sandbox capabilities and run tests |
 | `desktop` | Launch the native desktop GUI (egui) |
 
@@ -73,11 +73,11 @@ localgpt memory stats
 # Check sandbox capabilities
 localgpt sandbox status
 
-# Sign security policy after editing
-localgpt security sign
+# Sign LocalGPT.md after editing
+localgpt directives sign
 
-# View security audit log
-localgpt security audit
+# View directives audit log
+localgpt directives audit
 ```
 
 ## Built-in Chat Commands

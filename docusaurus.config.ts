@@ -97,8 +97,8 @@ const config: Config = {
               to: '/docs/sandbox',
             },
             {
-              label: 'Security Policy',
-              to: '/docs/security-policy',
+              label: 'LocalGPT.md',
+              to: '/docs/localgpt',
             },
           ],
         },

@@ -169,7 +169,7 @@ write = []    # e.g., ["/tmp/builds"]
 policy = "deny"   # "deny" or "proxy" (future)
 
 #──────────────────────────────────────────────────────────────────────────────
-# Security Policy Settings
+# Directives / LocalGPT.md Settings
 #──────────────────────────────────────────────────────────────────────────────
 
 [security]

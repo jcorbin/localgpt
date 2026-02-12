@@ -17,7 +17,7 @@ LocalGPT is a **local AI assistant with persistent memory, semantic search, and 
 - **Autonomous Heartbeat** - Daemon mode with scheduled background tasks that run automatically
 - **Skills System** - Extensible skills for specialized tasks
 - **Shell Sandbox** - Kernel-enforced isolation (Landlock + seccomp + Seatbelt) on every shell command. Zero configuration, enabled by default, graceful degradation.
-- **Security Policy** - Cryptographically signed `LocalGPT.md` workspace policy with HMAC-SHA256 tamper detection, per-turn injection, protected files, and hash-chained audit logging
+- **Standing Instructions** - Cryptographically signed `LocalGPT.md` for persistent, end-of-context directives — coding conventions, security boundaries, workflow preferences — with HMAC-SHA256 tamper detection
 - **Session Management** - Multi-session support with automatic context compaction
 - **HTTP API & WebSocket** - RESTful API and real-time WebSocket for integrations
 
@@ -31,7 +31,7 @@ LocalGPT is a **local AI assistant with persistent memory, semantic search, and 
 ├── workspace/
 │   ├── MEMORY.md                # Curated long-term knowledge
 │   ├── HEARTBEAT.md             # Pending autonomous tasks
-│   ├── LocalGPT.md              # User security policy
+│   ├── LocalGPT.md              # Standing instructions to the AI
 │   ├── .localgpt_manifest.json  # Policy signature
 │   └── memory/
 │       └── YYYY-MM-DD.md        # Daily conversation logs
@@ -64,4 +64,4 @@ LocalGPT automatically detects the provider based on model name prefix:
 - [Quick Start](/docs/quick-start) - Get up and running in minutes
 - [CLI Commands](/docs/cli-commands) - Learn the available commands
 - [Shell Sandbox](/docs/sandbox) - Understand the security sandbox
-- [Security Policy](/docs/security-policy) - Configure workspace security rules
+- [LocalGPT.md](/docs/localgpt) - Your standing instructions to the AI

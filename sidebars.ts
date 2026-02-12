@@ -21,7 +21,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Security',
-      items: ['sandbox', 'security-policy'],
+      items: ['sandbox', 'localgpt'],
     },
     {
       type: 'category',
