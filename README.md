@@ -12,7 +12,8 @@ A local device focused AI assistant built in Rust — persistent memory, autonom
 - **Persistent memory** — markdown-based knowledge store with full-text and semantic search
 - **Autonomous heartbeat** — delegate tasks and let it work in the background
 - **Multiple interfaces** — CLI, web UI, desktop GUI, Telegram bot
-- **Multiple LLM providers** — Anthropic (Claude), OpenAI, Ollama
+- **Defense-in-depth security** — signed policy files, kernel-enforced sandbox, prompt injection defenses
+- **Multiple LLM providers** — Anthropic (Claude), OpenAI, Ollama, GLM (Z.AI)
 - **OpenClaw compatible** — works with SOUL, MEMORY, HEARTBEAT markdown files and skills format
 
 ## Install
@@ -94,6 +95,67 @@ Access LocalGPT from Telegram with full chat, tool use, and memory support.
 
 Once paired, use `/help` in Telegram to see available commands.
 
+## Security
+
+LocalGPT ships with layered security to keep the agent confined and your data safe — no cloud dependency required.
+
+### Kernel-Enforced Sandbox
+
+Every shell command the agent runs is executed inside an OS-level sandbox:
+
+| Platform | Mechanism | Capabilities |
+|----------|-----------|-------------|
+| **Linux** | Landlock LSM + seccomp-bpf | Filesystem allow-listing, network denial, syscall filtering |
+| **macOS** | Seatbelt (SBPL) | Filesystem allow-listing, network denial |
+| **All** | rlimits | 120s timeout, 1MB output cap, 50MB file size, 64 process limit |
+
+The sandbox denies access to sensitive directories (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.docker`) and blocks all network syscalls by default. Configure extra paths as needed:
+
+```toml
+[sandbox]
+enabled = true
+level = "auto"    # auto | full | standard | minimal | none
+
+[sandbox.allow_paths]
+read = ["/opt/data"]
+write = ["/tmp/scratch"]
+```
+
+```bash
+localgpt sandbox status   # Show sandbox capabilities
+localgpt sandbox test     # Run smoke tests
+```
+
+### Signed Security Policy (LocalGPT.md)
+
+Place a `LocalGPT.md` in your workspace to add custom rules (e.g. "never execute `rm -rf`"). The file is HMAC-SHA256 signed with a device-local key so the agent cannot tamper with it:
+
+```bash
+localgpt md sign     # Sign policy with device key
+localgpt md verify   # Check signature integrity
+localgpt md status   # Show security posture
+localgpt md audit    # View security event log
+```
+
+Verification runs at every session start. If the file is unsigned, missing, or tampered with, LocalGPT falls back to its hardcoded security suffix — it never operates with a compromised policy.
+
+### Prompt Injection Defenses
+
+- **Marker stripping** — known LLM control tokens (`<|im_start|>`, `[INST]`, `<<SYS>>`, etc.) are stripped from tool outputs
+- **Pattern detection** — regex scanning for injection phrases ("ignore previous instructions", "you are now a", etc.) with warnings surfaced to the user
+- **Content boundaries** — all external content is wrapped in XML delimiters (`<tool_output>`, `<memory_context>`, `<external_content>`) so the model can distinguish data from instructions
+- **Protected files** — the agent is blocked from writing to `LocalGPT.md`, `.localgpt_manifest.json`, `.device_key`, and the audit log
+
+### Audit Chain
+
+All security events (signing, verification, tamper detection, blocked writes) are logged to an append-only, hash-chained audit file at `~/.localgpt/.security_audit.jsonl`. Each entry contains the SHA-256 of the previous entry, making retroactive modification detectable.
+
+```bash
+localgpt md audit               # View audit log
+localgpt md audit --json        # Machine-readable output
+localgpt md audit --filter=tamper_detected
+```
+
 ## CLI Commands
 
 ```bash
@@ -112,6 +174,14 @@ localgpt daemon heartbeat         # Run one heartbeat cycle
 localgpt memory search "query"    # Search memory
 localgpt memory reindex           # Reindex files
 localgpt memory stats             # Show statistics
+
+# Security
+localgpt md sign                  # Sign LocalGPT.md policy
+localgpt md verify                # Verify policy signature
+localgpt md status                # Show security posture
+localgpt md audit                 # View security audit log
+localgpt sandbox status           # Show sandbox capabilities
+localgpt sandbox test             # Run sandbox smoke tests
 
 # Config
 localgpt config init              # Create default config
