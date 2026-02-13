@@ -211,14 +211,6 @@ async fn worker_loop(
                     let _ = tx.send(WorkerMessage::Error(e.to_string()));
                 }
             },
-            UiMessage::ApproveTools(_tools) => {
-                // Tool approval is handled in chat loop
-                // For now, just send done
-                let _ = tx.send(WorkerMessage::Done);
-            }
-            UiMessage::DenyTools => {
-                let _ = tx.send(WorkerMessage::Done);
-            }
             UiMessage::RefreshSessions => {
                 if let Ok(sessions) = list_sessions_for_agent(&agent_id) {
                     let _ = tx.send(WorkerMessage::Sessions(sessions));
