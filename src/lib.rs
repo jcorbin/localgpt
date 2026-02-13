@@ -13,6 +13,8 @@ pub mod concurrency;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod desktop;
+#[cfg(feature = "gen")]
+pub mod gen3d;
 pub mod heartbeat;
 pub mod memory;
 pub mod sandbox;

@@ -4,7 +4,7 @@ mod session;
 mod session_store;
 mod skills;
 mod system_prompt;
-mod tools;
+pub mod tools;
 
 pub use providers::{
     ImageAttachment, LLMProvider, LLMResponse, LLMResponseContent, Message, Role, StreamChunk,
@@ -195,6 +195,46 @@ impl Agent {
         Ok(Self {
             config,
             app_config: app_config.clone(),
+            provider,
+            session: Session::new(),
+            memory,
+            tools,
+            cumulative_usage: Usage::default(),
+            verified_security_policy,
+        })
+    }
+
+    /// Create an agent with custom pre-built tools (e.g., for Gen mode).
+    pub fn new_with_tools(
+        app_config: Config,
+        _agent_id: &str,
+        memory: Arc<MemoryManager>,
+        tools: Vec<Box<dyn Tool>>,
+    ) -> Result<Self> {
+        let agent_config = AgentConfig {
+            model: app_config.agent.default_model.clone(),
+            context_window: app_config.agent.context_window,
+            reserve_tokens: app_config.agent.reserve_tokens,
+        };
+        let provider = providers::create_provider(&agent_config.model, &app_config)?;
+
+        // Load security policy
+        let workspace = app_config.workspace_path();
+        let state_dir = workspace
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("~/.localgpt"));
+        let verified_security_policy = if app_config.security.disable_policy {
+            None
+        } else {
+            match crate::security::load_and_verify_policy(&workspace, state_dir) {
+                crate::security::PolicyVerification::Valid(content) => Some(content),
+                _ => None,
+            }
+        };
+
+        Ok(Self {
+            config: agent_config,
+            app_config,
             provider,
             session: Session::new(),
             memory,

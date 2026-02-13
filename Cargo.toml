@@ -17,6 +17,8 @@ default = ["desktop"]
 desktop = ["eframe"]
 # GGUF embedding model support via llama.cpp (requires C++ compiler)
 gguf = ["llama-cpp-2"]
+# 3D scene generation via Bevy renderer (LocalGPT Gen)
+gen = ["bevy", "image"]
 
 [dependencies]
 # Async runtime
@@ -101,6 +103,10 @@ eframe = { version = "0.33", optional = true, default-features = false, features
     "x11",
     "wayland",
 ] }
+
+# 3D generation via Bevy (optional — enable with --features gen)
+bevy = { version = "0.15", optional = true }
+image = { version = "0.25", optional = true }
 
 # Unix daemonization and sandbox (process isolation)
 [target.'cfg(unix)'.dependencies]

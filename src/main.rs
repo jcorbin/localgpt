@@ -17,6 +17,20 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    // Handle Gen mode specially — Bevy must own the main thread (no tokio runtime here)
+    #[cfg(feature = "gen")]
+    if let Commands::Gen(args) = cli.command {
+        // Initialize logging before handing off to Bevy
+        let log_level = if cli.verbose { "debug" } else { "info" };
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level)),
+            )
+            .init();
+        return cli::gen3d::run(args, &cli.agent);
+    }
+
     // Handle daemon start/restart specially - must fork BEFORE starting Tokio runtime
     #[cfg(unix)]
     if let Commands::Daemon(ref args) = cli.command {
@@ -56,6 +70,8 @@ async fn async_main(cli: Cli) -> Result<()> {
         Commands::Ask(args) => cli::ask::run(args, &cli.agent).await,
         #[cfg(feature = "desktop")]
         Commands::Desktop(args) => cli::desktop::run(args, &cli.agent),
+        #[cfg(feature = "gen")]
+        Commands::Gen(_) => unreachable!("Gen is handled before tokio runtime starts"),
         Commands::Daemon(args) => cli::daemon::run(args, &cli.agent).await,
         Commands::Memory(args) => cli::memory::run(args, &cli.agent).await,
         Commands::Config(args) => cli::config::run(args).await,
