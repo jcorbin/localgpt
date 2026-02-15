@@ -1,5 +1,6 @@
 //! Bevy GenPlugin — command processing, default scene, screenshot capture.
 
+use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::mesh::Indices;
 use bevy::render::render_asset::RenderAssetUsages;
@@ -35,6 +36,26 @@ struct PendingScreenshot {
     path: Option<String>,
 }
 
+/// Marker component for the interactive fly camera.
+#[derive(Component)]
+struct FlyCam;
+
+/// Configuration for the fly camera controller.
+#[derive(Resource)]
+struct FlyCamConfig {
+    move_speed: f32,
+    look_sensitivity: f32,
+}
+
+impl Default for FlyCamConfig {
+    fn default() -> Self {
+        Self {
+            move_speed: 5.0,
+            look_sensitivity: 0.003,
+        }
+    }
+}
+
 /// Plugin that sets up the Gen 3D environment.
 pub struct GenPlugin {
     pub channels: GenChannels,
@@ -55,8 +76,18 @@ pub fn setup_gen_app(app: &mut App, channels: GenChannels) {
     app.insert_resource(GenChannelRes::new(channels))
         .init_resource::<NameRegistry>()
         .init_resource::<PendingScreenshots>()
+        .init_resource::<FlyCamConfig>()
         .add_systems(Startup, setup_default_scene)
-        .add_systems(Update, (process_gen_commands, process_pending_screenshots));
+        .add_systems(
+            Update,
+            (
+                process_gen_commands,
+                process_pending_screenshots,
+                fly_cam_movement,
+                fly_cam_look,
+                fly_cam_scroll_speed,
+            ),
+        );
 }
 
 /// Default scene: ground plane, camera, directional light, ambient light.
@@ -91,6 +122,7 @@ fn setup_default_scene(
             Camera3d::default(),
             Transform::from_translation(Vec3::new(5.0, 5.0, 5.0)).looking_at(Vec3::ZERO, Vec3::Y),
             Name::new("main_camera"),
+            FlyCam,
             GenEntity {
                 entity_type: GenEntityType::Camera,
             },
@@ -807,5 +839,94 @@ fn handle_spawn_mesh(
     GenResponse::Spawned {
         name: cmd.name,
         entity_id,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Fly camera systems
+// ---------------------------------------------------------------------------
+
+/// WASD + Space/Shift movement relative to camera orientation.
+fn fly_cam_movement(
+    keys: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+    config: Res<FlyCamConfig>,
+    mut query: Query<&mut Transform, With<FlyCam>>,
+) {
+    let Ok(mut transform) = query.get_single_mut() else {
+        return;
+    };
+
+    let forward = transform.forward().as_vec3();
+    let right = transform.right().as_vec3();
+
+    let mut velocity = Vec3::ZERO;
+    if keys.pressed(KeyCode::KeyW) {
+        velocity += forward;
+    }
+    if keys.pressed(KeyCode::KeyS) {
+        velocity -= forward;
+    }
+    if keys.pressed(KeyCode::KeyA) {
+        velocity -= right;
+    }
+    if keys.pressed(KeyCode::KeyD) {
+        velocity += right;
+    }
+    if keys.pressed(KeyCode::Space) {
+        velocity += Vec3::Y;
+    }
+    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+        velocity -= Vec3::Y;
+    }
+
+    if velocity != Vec3::ZERO {
+        transform.translation += velocity.normalize() * config.move_speed * time.delta_secs();
+    }
+}
+
+/// Right-click + mouse drag to rotate the camera (yaw and pitch).
+fn fly_cam_look(
+    mouse: Res<ButtonInput<MouseButton>>,
+    config: Res<FlyCamConfig>,
+    mut motion_reader: EventReader<MouseMotion>,
+    mut query: Query<&mut Transform, With<FlyCam>>,
+) {
+    let delta: Vec2 = motion_reader.read().map(|e| e.delta).sum();
+    if delta == Vec2::ZERO || !mouse.pressed(MouseButton::Right) {
+        return;
+    }
+
+    let Ok(mut transform) = query.get_single_mut() else {
+        return;
+    };
+
+    let yaw = -delta.x * config.look_sensitivity;
+    let pitch = -delta.y * config.look_sensitivity;
+
+    // Apply yaw (rotate around global Y axis)
+    transform.rotate_y(yaw);
+
+    // Apply pitch (rotate around local X axis) with clamping
+    let right = transform.right().as_vec3();
+    let new_rotation = Quat::from_axis_angle(right, pitch) * transform.rotation;
+
+    // Clamp pitch: check the angle between the camera's forward and the horizontal plane
+    let new_forward = new_rotation * Vec3::NEG_Z;
+    let pitch_angle = new_forward.y.asin();
+    let max_pitch = 89.0_f32.to_radians();
+
+    if pitch_angle.abs() < max_pitch {
+        transform.rotation = new_rotation;
+    }
+}
+
+/// Scroll wheel adjusts movement speed.
+fn fly_cam_scroll_speed(
+    mut scroll_reader: EventReader<MouseWheel>,
+    mut config: ResMut<FlyCamConfig>,
+) {
+    for event in scroll_reader.read() {
+        config.move_speed = (config.move_speed * (1.0 + event.y * 0.1)).clamp(0.5, 100.0);
     }
 }
