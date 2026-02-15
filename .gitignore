@@ -26,3 +26,6 @@ target
 .*
 !.gitignore
 !.github/
+
+# hack-y local install script build directory
+update_prefix/
