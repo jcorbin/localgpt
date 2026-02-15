@@ -11,6 +11,7 @@ categories = ["command-line-utilities", "graphics"]
 
 [package.metadata.release]
 dependent-version = "upgrade"
+tag-name = "{{crate_name}}-v{{version}}"
 
 [dependencies]
 localgpt = { version = "0.2", path = "..", features = ["gen"] }
