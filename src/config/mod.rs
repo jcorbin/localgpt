@@ -1,7 +1,7 @@
 mod migrate;
 mod schema;
 
-pub use migrate::{has_openclaw_workspace, openclaw_config_path, try_migrate_openclaw_config};
+pub use migrate::check_openclaw_detected;
 pub use schema::*;
 
 use anyhow::Result;
@@ -537,13 +537,6 @@ impl Config {
         let path = paths.config_file();
 
         if !path.exists() {
-            // Try to migrate from OpenClaw config
-            if let Some(mut migrated) = try_migrate_openclaw_config() {
-                migrated.paths = paths;
-                // Save migrated config to disk
-                migrated.save()?;
-                return Ok(migrated);
-            }
             // Create default config file on first run
             let config = Config {
                 paths,

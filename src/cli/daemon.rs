@@ -96,6 +96,10 @@ pub fn daemonize_and_run(agent_id: &str) -> Result<()> {
     println!("\nUse 'localgpt daemon status' to check status");
     println!("Use 'localgpt daemon stop' to stop\n");
 
+    if let Some(notice) = crate::config::check_openclaw_detected() {
+        println!("{}\n", notice);
+    }
+
     // Fork BEFORE starting Tokio
     // Use append mode to preserve previous logs within the same day
     let stdout = std::fs::OpenOptions::new()
@@ -295,6 +299,10 @@ async fn start_daemon(foreground: bool, agent_id: &str) -> Result<()> {
         "Starting LocalGPT daemon in foreground (agent: {})...",
         agent_id
     );
+
+    if let Some(notice) = crate::config::check_openclaw_detected() {
+        println!("{}\n", notice);
+    }
 
     // Write PID file for foreground mode
     fs::write(&pid_file, std::process::id().to_string())?;

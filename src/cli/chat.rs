@@ -183,6 +183,10 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
     );
     println!("Type /help for commands, /quit to exit\n");
 
+    if let Some(notice) = crate::config::check_openclaw_detected() {
+        println!("{}\n", notice);
+    }
+
     // Store agent_id for command handling
     let agent_id = agent_id.to_string();
 
