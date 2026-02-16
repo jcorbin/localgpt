@@ -47,7 +47,7 @@ impl eframe::App for WebApp {
             ui.horizontal(|ui| {
                 ui.heading("LocalGPT");
                 ui.separator();
-                
+
                 // Status indicator
                 let status_color = if self.status.connected {
                     egui::Color32::GREEN
@@ -55,15 +55,15 @@ impl eframe::App for WebApp {
                     egui::Color32::RED
                 };
                 ui.colored_label(status_color, "●");
-                
+
                 ui.label(format!("Model: {}", self.status.model));
-                
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("New Session").clicked() {
                         self.messages.clear();
                         self.session_id = None;
                     }
-                    
+
                     if let Some(ref id) = self.session_id {
                         // Safe truncation that respects UTF-8 character boundaries
                         let truncated: String = id.chars().take(8).collect();
@@ -107,7 +107,7 @@ impl eframe::App for WebApp {
                         .hint_text("Type a message..."),
                 );
 
-                let enter_without_shift = input_response.has_focus() 
+                let enter_without_shift = input_response.has_focus()
                     && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
 
                 if ui.button("Send").clicked() || enter_without_shift {
@@ -127,10 +127,10 @@ impl WebApp {
             egui::Color32::from_rgb(30, 50, 40)
         };
 
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(bg_color)
-            .inner_margin(egui::Margin::same(10.0))
-            .corner_radius(egui::CornerRadius::same(5.0))
+            .inner_margin(egui::Margin::same(10))
+            .corner_radius(egui::CornerRadius::same(5))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let role_color = if msg.role == "user" {

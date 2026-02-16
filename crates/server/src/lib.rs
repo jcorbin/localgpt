@@ -1,10 +1,14 @@
+#[cfg(not(target_arch = "wasm32"))]
 mod http;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod telegram;
+#[cfg(not(target_arch = "wasm32"))]
 mod websocket;
 
 #[cfg(feature = "egui-web")]
 pub mod web;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use http::Server;
 
 // WASM entry point for egui web UI
@@ -16,7 +20,7 @@ use wasm_bindgen::prelude::*;
 pub async fn start_web_ui(canvas_id: &str) -> Result<(), wasm_bindgen::JsValue> {
     // Redirect `log` message to `console.log` and friends:
     console_error_panic_hook::set_once();
-    
+
     let web_options = eframe::WebOptions::default();
 
     let document = web_sys::window()

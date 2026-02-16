@@ -356,12 +356,14 @@ async fn serve_ui_file(Path(path): Path<String>) -> Response {
 fn serve_ui_asset(path: &str) -> Response {
     match UiAssets::get(path) {
         Some(content) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
-            (
-                [(header::CONTENT_TYPE, mime.as_ref())],
-                content.data.to_vec(),
-            )
-                .into_response()
+            let mime = match path.rsplit('.').next() {
+                Some("js") => "application/javascript".to_string(),
+                Some("wasm") => "application/wasm".to_string(),
+                _ => mime_guess::from_path(path)
+                    .first_or_octet_stream()
+                    .to_string(),
+            };
+            ([(header::CONTENT_TYPE, mime)], content.data.to_vec()).into_response()
         }
         None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }
