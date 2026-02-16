@@ -1,0 +1,61 @@
+[package]
+name = "localgpt-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "LocalGPT CLI — a local-only AI assistant"
+readme = "../../README.md"
+keywords = ["ai", "assistant", "llm", "memory", "local"]
+categories = ["command-line-utilities", "text-processing"]
+
+[[bin]]
+name = "localgpt"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+# Desktop GUI (eframe/egui). Disable for headless/server/Docker builds.
+desktop = ["eframe"]
+
+[dependencies]
+localgpt-core = { workspace = true }
+localgpt-server = { workspace = true }
+localgpt-sandbox = { workspace = true }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+shellexpand = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+toml = { workspace = true }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# CLI line editor
+rustyline = "17.0.2"
+
+# Desktop GUI (optional)
+eframe = { version = "0.33", optional = true, default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "persistence",
+    "x11",
+    "wayland",
+] }
+
+# Unix daemonization
+[target.'cfg(unix)'.dependencies]
+daemonize = "0.5"
+nix = { version = "0.31", features = ["process", "resource", "signal"] }
+
+[dev-dependencies]
+tempfile = "3.25"

@@ -4699,72 +4699,138 @@ dependencies = [
 ]
 
 [[package]]
-name = "localgpt"
-version = "0.2.0"
+name = "localgpt-cli"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "daemonize",
+ "eframe",
+ "futures",
+ "localgpt-core",
+ "localgpt-sandbox",
+ "localgpt-server",
+ "nix 0.31.1",
+ "rand 0.10.0",
+ "rustyline",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "localgpt-core"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "axum",
  "base64 0.22.1",
- "bevy",
  "cc",
  "chrono",
- "clap",
- "daemonize",
  "directories",
- "eframe",
  "etcetera",
  "fastembed",
  "fs2",
  "futures",
  "glob",
  "hmac",
- "image",
  "json5",
- "landlock",
  "libc",
  "llama-cpp-2",
- "mime_guess",
  "mockall",
- "nix 0.31.1",
  "notify",
  "once_cell",
  "rand 0.10.0",
  "regex",
  "reqwest 0.13.2",
  "rusqlite",
- "rust-embed",
- "rustyline",
- "seccompiler",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2",
  "shellexpand",
  "sqlite-vec",
- "teloxide",
  "tempfile",
  "thiserror 2.0.18",
  "tiktoken-rs",
  "tokio",
  "tokio-stream",
  "toml",
- "tower-http",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
 [[package]]
 name = "localgpt-gen"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "bevy",
  "clap",
- "localgpt",
+ "image",
+ "localgpt-core",
+ "serde",
+ "serde_json",
  "tokio",
+ "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "localgpt-mobile"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "localgpt-core",
+]
+
+[[package]]
+name = "localgpt-sandbox"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "landlock",
+ "localgpt-core",
+ "nix 0.31.1",
+ "seccompiler",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "localgpt-server"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "chrono",
+ "futures",
+ "localgpt-core",
+ "mime_guess",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "teloxide",
+ "tokio",
+ "tokio-stream",
+ "tower-http",
+ "tracing",
 ]
 
 [[package]]
@@ -6808,6 +6874,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rust-embed-utils",
+ "shellexpand",
  "syn 2.0.115",
  "walkdir",
 ]

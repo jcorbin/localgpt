@@ -29,7 +29,21 @@ cargo fmt --check
 
 LocalGPT is a local-only AI assistant with persistent markdown-based memory and optional autonomous operation via heartbeat.
 
-### Core Modules (`src/`)
+The project is structured as a Rust workspace with multiple crates:
+
+```
+crates/
+├── core/      # localgpt-core — shared library (agent, memory, config, security)
+├── cli/       # localgpt-cli — binary with clap CLI, desktop GUI, dangerous tools
+├── server/    # localgpt-server — HTTP/WebSocket API and Telegram bot
+├── sandbox/   # localgpt-sandbox — Landlock/Seatbelt process sandboxing
+├── mobile/    # localgpt-mobile — UniFFI bindings for iOS/Android (placeholder)
+└── gen/       # localgpt-gen — Bevy 3D scene generation binary
+```
+
+### Core (`crates/core/` — `localgpt-core`)
+
+Platform-independent library with zero platform-specific deps. Compiles for iOS/Android targets.
 
 - **agent/** - LLM interaction layer
   - `providers.rs` - Trait `LLMProvider` with implementations for OpenAI, Anthropic, Ollama, Claude CLI, and GLM (Z.AI). Model prefix determines provider (`claude-cli/*` → Claude CLI, `gpt-*` → OpenAI, `claude-*` → Anthropic API, `glm-*` → GLM, else Ollama)
@@ -37,26 +51,39 @@ LocalGPT is a local-only AI assistant with persistent markdown-based memory and 
   - `session_store.rs` - Session metadata store (`sessions.json`) with CLI session ID persistence
   - `system_prompt.rs` - Builds system prompt with identity, safety, workspace info, tools, skills, and special tokens
   - `skills.rs` - Loads SKILL.md files from workspace/skills/ for specialized task handling
-  - `tools.rs` - Agent tools: `bash`, `read_file`, `write_file`, `edit_file`, `memory_search`, `memory_get`, `web_fetch`
-
-- **memory/** - Markdown-based knowledge store
-  - `index.rs` - SQLite FTS5 index for fast search. Chunks files (~400 tokens with 80 token overlap)
-  - `watcher.rs` - File system watcher for automatic reindexing
-  - `workspace.rs` - Auto-creates workspace templates on first run (MEMORY.md, HEARTBEAT.md, SOUL.md, .gitignore)
-  - Files: `MEMORY.md` (curated knowledge), `HEARTBEAT.md` (pending tasks), `memory/YYYY-MM-DD.md` (daily logs)
-
-- **heartbeat/** - Autonomous task runner
-  - `runner.rs` - Runs on configurable interval within active hours. Reads `HEARTBEAT.md` and executes pending tasks
-
-- **server/** - HTTP/WebSocket API and Telegram bot
-  - `http.rs` - Axum-based REST API. Note: creates new Agent per request (no session persistence via HTTP)
-  - `telegram.rs` - Telegram bot interface with one-time pairing auth, per-chat sessions, streaming responses with debounced message edits (2s), and full tool support
-  - Endpoints: `/health`, `/api/status`, `/api/chat`, `/api/memory/search`, `/api/memory/stats`
-
+  - `tools/mod.rs` - Safe tools only: `memory_search`, `memory_get`, `web_fetch`, `web_search`
+- **memory/** - Markdown-based knowledge store (SQLite FTS5, file watcher, workspace templates)
+- **heartbeat/** - Autonomous task runner on configurable interval
 - **config/** - TOML configuration at `~/.localgpt/config.toml`
-  - Supports `${ENV_VAR}` expansion in API keys
-  - `workspace_path()` returns expanded memory workspace path
-  - `migrate.rs` - Auto-migrates from OpenClaw's `~/.openclaw/config.json5` if LocalGPT config doesn't exist
+- **commands.rs** - Shared slash command definitions used by CLI and Telegram
+- **concurrency/** - TurnGate and WorkspaceLock
+- **paths.rs** - XDG directory resolution
+- **security/** - LocalGPT.md policy signing/verification
+
+### CLI (`crates/cli/` — `localgpt-cli`)
+
+Binary crate. Adds dangerous tools (bash, read_file, write_file, edit_file) via `tools.rs` and `agent.extend_tools()`.
+
+- **cli/** - Clap subcommands: chat, ask, daemon, memory, config, etc.
+- **tools.rs** - CLI-only tools with sandbox integration
+- **desktop/** - Optional eframe/egui desktop GUI (feature `desktop`)
+
+### Server (`crates/server/` — `localgpt-server`)
+
+- **http.rs** - Axum REST API with embedded Web UI
+- **telegram.rs** - Telegram bot with pairing auth, streaming, per-chat sessions
+
+### Sandbox (`crates/sandbox/` — `localgpt-sandbox`)
+
+- Process sandboxing: Landlock (Linux), Seatbelt (macOS)
+- Policy builder, capability detection, sandbox child exec
+
+### Key Patterns
+
+- `Agent::new()` creates safe tools only; CLI extends with `agent.extend_tools(create_cli_tools())`
+- `Agent::new_with_tools()` for fully custom tool sets (Gen mode)
+- Agent is not `Send+Sync` due to SQLite — HTTP handler uses `spawn_blocking`
+- Session compaction triggers memory flush before truncating
 
 - **commands.rs** - Shared slash command definitions used by both CLI chat and Telegram bot
 

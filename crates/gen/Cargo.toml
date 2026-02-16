@@ -1,0 +1,30 @@
+[package]
+name = "localgpt-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "LocalGPT Gen — AI-driven 3D scene generation"
+keywords = ["ai", "3d", "scene-generation", "bevy", "localgpt"]
+categories = ["command-line-utilities", "graphics"]
+
+[[bin]]
+name = "localgpt-gen"
+path = "src/main.rs"
+
+[dependencies]
+localgpt-core = { workspace = true }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+
+clap = { version = "4.5", features = ["derive"] }
+
+# 3D generation via Bevy
+bevy = "0.15"
+image = "0.25"
