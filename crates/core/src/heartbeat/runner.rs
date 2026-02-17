@@ -121,6 +121,7 @@ impl HeartbeatRunner {
 
     async fn first_delay(&self) -> Duration {
         // Read last heartbeat event to calibrate first tick time
+        // TODO make this read async, maybe see if serde_json has a file handle/stream consumer and use that instead
         if let Ok(json) = fs::read_to_string(self.config.paths.last_heartbeat())
             && let Ok(event) = serde_json::from_str::<HeartbeatEvent>(&json)
         {
