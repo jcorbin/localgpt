@@ -395,6 +395,7 @@ impl SearchProvider for TavilyProvider {
                 "query": query,
                 "max_results": max_results,
                 "search_depth": self.config.search_depth,
+                // TODO this should be able to bass a "basic" or "advanced" string too
                 "include_answer": self.config.include_answer
             }))
             .send()
