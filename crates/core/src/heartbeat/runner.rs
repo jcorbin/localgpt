@@ -287,8 +287,10 @@ impl HeartbeatRunner {
                 warn!(name: "Heartbeat", "failed to write event: {}", e);
             }
 
+            // TODO why have in memory state, when runtime state file probably better?
             emit_heartbeat_event(event);
 
+            // TODO is there any way to read the deadline back out of interval for this log?
             info!(name: "Heartbeat", "waiting for next tick");
         }
     }
