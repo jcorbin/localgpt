@@ -28,3 +28,6 @@ clap = { version = "4.5", features = ["derive"] }
 # 3D generation via Bevy
 bevy = "0.15"
 image = "0.25"
+
+# glTF/GLB export
+gltf-json = { version = "1", features = ["names"] }

@@ -4983,6 +4983,7 @@ dependencies = [
  "async-trait",
  "bevy",
  "clap",
+ "gltf-json",
  "image",
  "localgpt-core",
  "serde",

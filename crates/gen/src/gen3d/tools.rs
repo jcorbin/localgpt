@@ -27,7 +27,8 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenSetLightTool::new(bridge.clone())),
         Box::new(GenSetEnvironmentTool::new(bridge.clone())),
         Box::new(GenSpawnMeshTool::new(bridge.clone())),
-        Box::new(GenExportScreenshotTool::new(bridge)),
+        Box::new(GenExportScreenshotTool::new(bridge.clone())),
+        Box::new(GenExportGltfTool::new(bridge)),
     ]
 }
 
@@ -883,6 +884,58 @@ impl Tool for GenExportScreenshotTool {
             GenResponse::Screenshot { image_path } => {
                 Ok(format!("Exported screenshot to: {}", image_path))
             }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_export_gltf
+// ===========================================================================
+
+struct GenExportGltfTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenExportGltfTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenExportGltfTool {
+    fn name(&self) -> &str {
+        "gen_export_gltf"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_export_gltf".into(),
+            description: "Export the current scene as a glTF binary (.glb) file.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Output file path (.glb extension added if missing)"
+                    }
+                },
+                "required": ["path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let path = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?
+            .to_string();
+
+        match self.bridge.send(GenCommand::ExportGltf { path }).await? {
+            GenResponse::Exported { path } => Ok(format!("Exported scene to: {}", path)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }

@@ -39,6 +39,9 @@ pub enum GenCommand {
         width: u32,
         height: u32,
     },
+    ExportGltf {
+        path: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
