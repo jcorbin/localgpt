@@ -232,6 +232,29 @@ pub struct TavilyConfig {
     #[serde(default = "default_basic")]
     pub search_depth: String,
 
+    // TODO may also be a string like "basic" or "advanced"
+    //
+    //     `include_answer` is a boolean (or string) parameter that tells Tavily to include an
+    //     AI-generated answer summary based on the search results.
+    //
+    //     Options:
+    //     - `true` (or `"basic"`) — Includes a brief, quick answer synthesized from the search results
+    //     - `true` (or `"advanced"`) — Includes a more detailed answer (when passed as string)
+    //     - `false` — Only returns the raw search results (default)
+    //
+    //     When enabled, Tavily uses its own AI to analyze the search results and provide a concise,
+    //     direct answer to your original query, in addition to the list of search results. This is
+    //     useful when you want a quick summary without needing to read through multiple results.
+    //
+    //     According to the Tavily docs, `include_answer` affects response size and latency, so it
+    //     cannot be changed dynamically during invocation. This helps prevent context window
+    //     issues.
+    //
+    //     If you search for "What is the capital of France?", with `include_answer=true`, Tavily would return:
+    //     1. A brief AI-generated answer: "The capital of France is Paris."
+    //     2. The list of search results containing relevant sources
+    //
+    //     This saves the LLM from needing to summarize the results itself, potentially reducing token usage.
     #[serde(default = "default_true")]
     pub include_answer: bool,
 }
