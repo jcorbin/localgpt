@@ -63,28 +63,6 @@ impl ChatView {
                     });
                 }
 
-                // Show pending approval dialog
-                if state.pending_approval.is_some() {
-                    let tools = state.pending_approval.clone().unwrap();
-                    ui.add_space(10.0);
-                    ui.group(|ui| {
-                        ui.label(RichText::new("Tools pending approval:").strong());
-                        for tool in &tools {
-                            ui.label(format!("  - {}", tool.name));
-                        }
-                        ui.horizontal(|ui| {
-                            if ui.button("Approve").clicked() {
-                                message_to_send = Some(UiMessage::ApproveTools(tools.clone()));
-                                state.pending_approval = None;
-                            }
-                            if ui.button("Deny").clicked() {
-                                message_to_send = Some(UiMessage::DenyTools);
-                                state.pending_approval = None;
-                            }
-                        });
-                    });
-                }
-
                 // Scroll to bottom if requested
                 if state.scroll_to_bottom {
                     ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
