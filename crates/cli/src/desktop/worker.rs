@@ -118,9 +118,6 @@ async fn worker_loop(
         ));
     }
 
-    // Track tools requiring approval
-    let approval_tools: Vec<String> = agent.approval_required_tools().to_vec();
-
     // Main loop
     while let Ok(msg) = rx.recv() {
         let mut should_auto_save = false;
@@ -144,22 +141,12 @@ async fn worker_loop(
                                         id,
                                         arguments,
                                     } => {
-                                        // Check if this tool requires approval
-                                        if approval_tools.contains(&name) {
-                                            // Collect for approval
-                                            pending_tools.push(ToolCall {
-                                                id,
-                                                name,
-                                                arguments: String::new(),
-                                            });
-                                        } else {
-                                            let detail = extract_tool_detail(&name, &arguments);
-                                            let _ = tx.send(WorkerMessage::ToolCallStart {
-                                                name,
-                                                id,
-                                                detail,
-                                            });
-                                        }
+                                        let detail = extract_tool_detail(&name, &arguments);
+                                        let _ = tx.send(WorkerMessage::ToolCallStart {
+                                            name,
+                                            id,
+                                            detail,
+                                        });
                                     }
                                     StreamEvent::ToolCallEnd {
                                         name,
@@ -224,14 +211,6 @@ async fn worker_loop(
                     let _ = tx.send(WorkerMessage::Error(e.to_string()));
                 }
             },
-            UiMessage::ApproveTools(_tools) => {
-                // Tool approval is handled in chat loop
-                // For now, just send done
-                let _ = tx.send(WorkerMessage::Done);
-            }
-            UiMessage::DenyTools => {
-                let _ = tx.send(WorkerMessage::Done);
-            }
             UiMessage::RefreshSessions => {
                 if let Ok(sessions) = list_sessions_for_agent(&agent_id) {
                     let _ = tx.send(WorkerMessage::Sessions(sessions));

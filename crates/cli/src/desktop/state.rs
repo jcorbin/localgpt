@@ -11,10 +11,6 @@ pub enum UiMessage {
     NewSession,
     /// Resume a session by ID
     ResumeSession(String),
-    /// Approve pending tool calls
-    ApproveTools(Vec<ToolCall>),
-    /// Deny pending tool calls
-    DenyTools,
     /// Request session list refresh
     RefreshSessions,
     /// Request status update
