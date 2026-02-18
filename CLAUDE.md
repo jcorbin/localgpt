@@ -28,6 +28,12 @@ cargo fmt --check
 cargo check -p localgpt-mobile --target aarch64-apple-ios
 cargo check -p localgpt-mobile --target aarch64-apple-ios-sim
 
+# Gen (3D scene generation with Bevy)
+cargo run -p localgpt-gen                          # Interactive mode
+cargo run -p localgpt-gen -- "build a castle"      # With initial prompt
+cargo run -p localgpt-gen -- -s model.glb          # Load existing scene
+cargo run -p localgpt-gen -- -v                    # Verbose logging
+
 # Headless build (no desktop GUI)
 cargo build -p localgpt-cli --no-default-features
 

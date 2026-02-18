@@ -95,7 +95,7 @@ fn run_bevy_app(
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "LocalGPT Gen".into(),
-                    resolution: bevy::window::WindowResolution::new(1280.0, 720.0),
+                    resolution: bevy::window::WindowResolution::new(1280, 720),
                     ..default()
                 }),
                 ..default()

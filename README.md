@@ -284,11 +284,14 @@ See [`docs/egui-web-poc.md`](docs/egui-web-poc.md) for details on architecture, 
 
 ## Gen Mode (World Generation)
 
-`Gen` is currently shipped as a separate binary: `localgpt-gen` (not a `localgpt gen` subcommand).
+`Gen` is a separate binary (`localgpt-gen`) in the workspace — not a `localgpt gen` subcommand.
 
 ```bash
 # Install from this repo
 cargo install --path crates/gen
+
+# Or run directly from the workspace
+cargo run -p localgpt-gen
 
 # Start interactive Gen mode
 localgpt-gen
@@ -296,13 +299,20 @@ localgpt-gen
 # Start with an initial prompt
 localgpt-gen "Create a low-poly forest scene with a path and warm lighting"
 
-# Start from an existing glTF/GLB scene
+# Load an existing glTF/GLB scene
 localgpt-gen --scene ./scene.glb
+
+# Verbose logging
+localgpt-gen --verbose
+
+# Combine options
+localgpt-gen -v -s ./scene.glb "Add warm lighting"
+
+# Custom agent ID (default: "gen")
+localgpt-gen --agent my-gen-agent
 ```
 
-`localgpt-gen` runs a Bevy window on the main thread and an agent loop in the background. It supports scene inspection, primitive spawning/modification, glTF load/export, and scene export to `.glb`.
-
-Current limitation: screenshot capture is wired but still placeholder-level in the Bevy plugin (path is returned; full pixel capture is not finished yet).
+`localgpt-gen` runs a Bevy window (1280x720) on the main thread and an agent loop on a background tokio runtime. The agent gets safe tools (memory, web) plus Gen-specific tools (spawn/modify entities, scene inspection, glTF export). Type `/quit` or `/exit` in the terminal to close.
 
 ## Blog
 

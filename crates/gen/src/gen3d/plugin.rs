@@ -1,10 +1,9 @@
 //! Bevy GenPlugin — command processing, default scene, screenshot capture, glTF loading.
 
+use bevy::asset::RenderAssetUsages;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
+use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
-use bevy::render::mesh::{Indices, VertexAttributeValues};
-use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::PrimitiveTopology;
 use bevy::scene::SceneRoot;
 
 use std::ffi::OsStr;
@@ -227,7 +226,7 @@ fn process_gen_commands(
     gen_entities: Query<&GenEntity>,
     names_query: Query<&Name>,
     children_query: Query<&Children>,
-    parent_query: Query<&Parent>,
+    parent_query: Query<&ChildOf>,
     visibility_query: Query<&Visibility>,
     material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
     mesh_handles: Query<&Mesh3d>,
@@ -512,7 +511,7 @@ fn handle_entity_info(
     gen_entities: &Query<&GenEntity>,
     names_query: &Query<&Name>,
     children_query: &Query<&Children>,
-    parent_query: &Query<&Parent>,
+    parent_query: &Query<&ChildOf>,
     visibility_query: &Query<&Visibility>,
     material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
     material_assets: &Assets<StandardMaterial>,
@@ -556,9 +555,9 @@ fn handle_entity_info(
             ch.iter()
                 .filter_map(|c| {
                     registry
-                        .get_name(*c)
+                        .get_name(c)
                         .map(|s| s.to_string())
-                        .or_else(|| names_query.get(*c).ok().map(|n| n.to_string()))
+                        .or_else(|| names_query.get(c).ok().map(|n| n.to_string()))
                 })
                 .collect()
         })
@@ -567,7 +566,7 @@ fn handle_entity_info(
     let parent = parent_query
         .get(entity)
         .ok()
-        .and_then(|p| registry.get_name(p.get()).map(|s| s.to_string()));
+        .and_then(|p| registry.get_name(p.parent()).map(|s| s.to_string()));
 
     GenResponse::EntityInfo(EntityInfoData {
         name: name.to_string(),
@@ -682,7 +681,7 @@ fn handle_spawn_primitive(
     if let Some(ref parent_name) = cmd.parent
         && let Some(parent_entity) = registry.get_entity(parent_name)
     {
-        commands.entity(entity).set_parent(parent_entity);
+        commands.entity(entity).set_parent_in_place(parent_entity);
     }
 
     let entity_id = entity.to_bits();
@@ -779,11 +778,11 @@ fn handle_modify_entity(
         match parent_opt {
             Some(parent_name) => {
                 if let Some(parent_entity) = registry.get_entity(&parent_name) {
-                    commands.entity(entity).set_parent(parent_entity);
+                    commands.entity(entity).set_parent_in_place(parent_entity);
                 }
             }
             None => {
-                commands.entity(entity).remove_parent();
+                commands.entity(entity).remove_parent_in_place();
             }
         }
     }
@@ -802,8 +801,7 @@ fn handle_delete_entity(
         };
     };
 
-    // Recursively despawn entity and all children
-    commands.entity(entity).despawn_recursive();
+    commands.entity(entity).despawn();
 
     GenResponse::Deleted {
         name: name.to_string(),
@@ -845,7 +843,7 @@ fn handle_set_light(
 
     // If light already exists, update it
     if let Some(entity) = registry.get_entity(&cmd.name) {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
         registry.remove_by_name(&cmd.name);
     }
 
@@ -928,9 +926,10 @@ fn handle_set_environment(cmd: EnvironmentCmd, commands: &mut Commands) -> GenRe
             .ambient_color
             .map(|c| Color::srgba(c[0], c[1], c[2], c[3]))
             .unwrap_or(Color::WHITE);
-        commands.insert_resource(AmbientLight {
+        commands.insert_resource(GlobalAmbientLight {
             color,
             brightness: intensity,
+            affects_lightmapped_meshes: true,
         });
     }
 
@@ -1013,7 +1012,7 @@ fn handle_export_gltf(
     registry: &NameRegistry,
     transforms: &Query<&Transform>,
     gen_entities: &Query<&GenEntity>,
-    parent_query: &Query<&Parent>,
+    parent_query: &Query<&ChildOf>,
     material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
     material_assets: &Assets<StandardMaterial>,
     mesh_handles: &Query<&Mesh3d>,
@@ -1419,7 +1418,7 @@ fn handle_export_gltf(
             continue;
         };
 
-        let parent_entity = parent_query.get(entity).ok().map(|p| p.get());
+        let parent_entity = parent_query.get(entity).ok().map(|p| p.parent());
         let parent_is_gen = parent_entity
             .and_then(|pe| entity_to_node.get(&pe))
             .copied();
@@ -1578,7 +1577,7 @@ fn fly_cam_movement(
     config: Res<FlyCamConfig>,
     mut query: Query<&mut Transform, With<FlyCam>>,
 ) {
-    let Ok(mut transform) = query.get_single_mut() else {
+    let Ok(mut transform) = query.single_mut() else {
         return;
     };
 
@@ -1614,7 +1613,7 @@ fn fly_cam_movement(
 fn fly_cam_look(
     mouse: Res<ButtonInput<MouseButton>>,
     config: Res<FlyCamConfig>,
-    mut motion_reader: EventReader<MouseMotion>,
+    mut motion_reader: MessageReader<MouseMotion>,
     mut query: Query<&mut Transform, With<FlyCam>>,
 ) {
     let delta: Vec2 = motion_reader.read().map(|e| e.delta).sum();
@@ -1622,7 +1621,7 @@ fn fly_cam_look(
         return;
     }
 
-    let Ok(mut transform) = query.get_single_mut() else {
+    let Ok(mut transform) = query.single_mut() else {
         return;
     };
 
@@ -1648,7 +1647,7 @@ fn fly_cam_look(
 
 /// Scroll wheel adjusts movement speed.
 fn fly_cam_scroll_speed(
-    mut scroll_reader: EventReader<MouseWheel>,
+    mut scroll_reader: MessageReader<MouseWheel>,
     mut config: ResMut<FlyCamConfig>,
 ) {
     for event in scroll_reader.read() {
