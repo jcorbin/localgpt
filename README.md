@@ -1,7 +1,7 @@
 
-# LocalGPT
+# <img src="https://localgpt.app/logo/localgpt-icon-app.png" width="50" height="50" alt="LocalGPT" /> LocalGPT
 
-A local device focused AI assistant built in Rust — persistent memory, autonomous tasks, ~27MB binary. Inspired by and compatible with OpenClaw.
+A local device focused AI assistant built in Rust — persistent memory, autonomous tasks. Inspired by and compatible with OpenClaw.
 
 `cargo install localgpt`
 
@@ -169,7 +169,7 @@ localgpt sandbox status   # Show sandbox capabilities
 localgpt sandbox test     # Run smoke tests
 ```
 
-### Signed Security Policy (LocalGPT.md)
+### Signed Custom Rules (LocalGPT.md)
 
 Place a `LocalGPT.md` in your workspace to add custom rules (e.g. "never execute `rm -rf`"). The file is HMAC-SHA256 signed with a device-local key so tampering will be detected:
 
@@ -286,11 +286,14 @@ LocalGPT includes a Proof of Concept for running the desktop Egui UI in the brow
 
 See [`docs/egui-web-poc.md`](docs/egui-web-poc.md) for details on architecture, benefits, tradeoffs, and implementation.
 
-## Gen Mode (World Generation)
+## <img src="https://localgpt.app/logo/localgpt-icon.png" width="100" height="100" alt="LocalGPT" /> Gen Mode (World Generation)
 
 `Gen` is a separate binary (`localgpt-gen`) in the workspace — not a `localgpt gen` subcommand.
 
 ```bash
+# Install from crates.io
+cargo install localgpt-gen
+
 # Install from this repo
 cargo install --path crates/gen
 
@@ -320,7 +323,7 @@ localgpt-gen --agent my-gen-agent
 
 ## Blog
 
-[Why I Built LocalGPT in 4 Nights](https://localgpt.app/blog/why-i-built-localgpt-in-4-nights) — the full story with commit-by-commit breakdown.
+[Why I Built LocalGPT in 4 Nights](https://localgpt.app/blog/why-i-built-localgpt-in-4-nights) — the initial story with commit-by-commit breakdown.
 
 ## Built With
 
@@ -339,3 +342,7 @@ Rust, Tokio, Axum, SQLite (FTS5 + sqlite-vec), fastembed, eframe
 ## License
 
 [Apache-2.0](LICENSE)
+
+### Your contributions
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be licensed under the Apache-2.0 license, without any additional terms or conditions.

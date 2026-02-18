@@ -15,7 +15,6 @@ LocalGPT is a **fresh Rust implementation** inspired by OpenClaw's architecture,
 | Memory system | Markdown + SQLite | Same approach |
 | Heartbeat | HEARTBEAT.md driven | Same approach |
 | Startup time | ~2-3s | <100ms |
-| Binary size | ~100MB (node) | ~27MB |
 
 ### Borrowed Concepts
 
