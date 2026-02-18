@@ -7,8 +7,8 @@ use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 use bevy::scene::SceneRoot;
 
-use std::path::PathBuf;
 use std::ffi::OsStr;
+use std::path::PathBuf;
 
 use super::GenChannels;
 use super::commands::*;
@@ -193,7 +193,9 @@ fn load_initial_scene(
     asset_server: Res<AssetServer>,
     mut pending: ResMut<PendingGltfLoads>,
 ) {
-    let Some(ref path) = initial_scene.path else { return };
+    let Some(ref path) = initial_scene.path else {
+        return;
+    };
 
     let name = path
         .file_stem()
@@ -343,7 +345,10 @@ fn process_load_gltf_commands(
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "imported_scene".to_string());
 
-                let asset_path = resolved.to_string_lossy().trim_start_matches('/').to_string();
+                let asset_path = resolved
+                    .to_string_lossy()
+                    .trim_start_matches('/')
+                    .to_string();
                 let handle = asset_server.load::<Scene>(format!("{}#Scene0", asset_path));
 
                 pending_gltf.queue.push(PendingGltfLoad {
