@@ -31,3 +31,6 @@ image = "0.25"
 
 # glTF/GLB export
 gltf-json = { version = "1", features = ["names"] }
+
+# Path resolution
+shellexpand = { workspace = true }

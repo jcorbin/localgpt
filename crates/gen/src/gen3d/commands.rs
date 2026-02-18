@@ -42,6 +42,11 @@ pub enum GenCommand {
     ExportGltf {
         path: Option<String>,
     },
+
+    // Tier 3b: Import
+    LoadGltf {
+        path: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +174,7 @@ pub enum GenResponse {
     LightSet { name: String },
     EnvironmentSet,
     Exported { path: String },
+    GltfLoaded { name: String, path: String },
     Error { message: String },
 }
 

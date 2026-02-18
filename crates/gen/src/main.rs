@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use std::path::PathBuf;
 
 mod gen3d;
 
@@ -22,6 +23,10 @@ struct Cli {
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
+
+    /// Load a glTF/GLB scene at startup
+    #[arg(short = 's', long)]
+    scene: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -39,6 +44,12 @@ fn main() -> Result<()> {
     // Load config early so both Bevy and agent threads can use it
     let config = localgpt_core::config::Config::load()?;
     let workspace = config.workspace_path();
+
+    // Resolve initial scene path if provided
+    let initial_scene = cli
+        .scene
+        .as_ref()
+        .and_then(|path| gen3d::plugin::resolve_gltf_path(path, &workspace));
 
     // Create the channel pair
     let (bridge, channels) = gen3d::create_gen_channels();
@@ -66,11 +77,15 @@ fn main() -> Result<()> {
     });
 
     // Run Bevy on the main thread
-    run_bevy_app(channels, workspace)
+    run_bevy_app(channels, workspace, initial_scene)
 }
 
 /// Set up and run the Bevy application on the main thread.
-fn run_bevy_app(channels: gen3d::GenChannels, workspace: std::path::PathBuf) -> Result<()> {
+fn run_bevy_app(
+    channels: gen3d::GenChannels,
+    workspace: std::path::PathBuf,
+    initial_scene: Option<PathBuf>,
+) -> Result<()> {
     use bevy::prelude::*;
 
     let mut app = App::new();
@@ -85,10 +100,14 @@ fn run_bevy_app(channels: gen3d::GenChannels, workspace: std::path::PathBuf) -> 
                 }),
                 ..default()
             })
+            .set(bevy::asset::AssetPlugin {
+                file_path: "/".to_string(),
+                ..default()
+            })
             .disable::<bevy::log::LogPlugin>(),
     );
 
-    gen3d::plugin::setup_gen_app(&mut app, channels, workspace);
+    gen3d::plugin::setup_gen_app(&mut app, channels, workspace, initial_scene);
 
     app.run();
 

@@ -27,6 +27,7 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenSetLightTool::new(bridge.clone())),
         Box::new(GenSetEnvironmentTool::new(bridge.clone())),
         Box::new(GenSpawnMeshTool::new(bridge.clone())),
+        Box::new(GenLoadGltfTool::new(bridge.clone())),
         Box::new(GenExportScreenshotTool::new(bridge.clone())),
         Box::new(GenExportGltfTool::new(bridge)),
     ]
@@ -812,6 +813,60 @@ impl Tool for GenSpawnMeshTool {
                 "Spawned mesh '{}' (entity_id: {})",
                 name, entity_id
             )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_load_gltf
+// ===========================================================================
+
+struct GenLoadGltfTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenLoadGltfTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenLoadGltfTool {
+    fn name(&self) -> &str {
+        "gen_load_gltf"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_load_gltf".into(),
+            description: "Load a glTF/GLB file from disk into the scene. Searches in workspace/exports by default.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to glTF/GLB file. Can be absolute, relative, or just a filename to search in workspace."
+                    }
+                },
+                "required": ["path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let path = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?
+            .to_string();
+
+        match self.bridge.send(GenCommand::LoadGltf { path }).await? {
+            GenResponse::GltfLoaded { name, path } => {
+                Ok(format!("Loaded '{}' from {}", name, path))
+            }
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }

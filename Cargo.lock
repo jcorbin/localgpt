@@ -4988,6 +4988,7 @@ dependencies = [
  "localgpt-core",
  "serde",
  "serde_json",
+ "shellexpand",
  "tokio",
  "tracing",
  "tracing-subscriber",

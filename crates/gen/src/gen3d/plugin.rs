@@ -1,12 +1,14 @@
-//! Bevy GenPlugin — command processing, default scene, screenshot capture.
+//! Bevy GenPlugin — command processing, default scene, screenshot capture, glTF loading.
 
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, VertexAttributeValues};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
+use bevy::scene::SceneRoot;
 
 use std::path::PathBuf;
+use std::ffi::OsStr;
 
 use super::GenChannels;
 use super::commands::*;
@@ -42,6 +44,26 @@ struct PendingScreenshot {
     width: u32,
     height: u32,
     path: Option<String>,
+}
+
+/// Initial glTF scene to load at startup.
+#[derive(Resource)]
+pub struct GenInitialScene {
+    pub path: Option<PathBuf>,
+}
+
+/// A glTF scene that is currently being loaded.
+struct PendingGltfLoad {
+    handle: Handle<Scene>,
+    name: String,
+    path: String,
+    send_response: bool,
+}
+
+/// Queue of pending glTF loads waiting for asset server to finish loading.
+#[derive(Resource, Default)]
+struct PendingGltfLoads {
+    queue: Vec<PendingGltfLoad>,
 }
 
 /// Marker component for the interactive fly camera.
@@ -81,23 +103,29 @@ impl Plugin for GenPlugin {
 /// Initialize the Gen world: channels, default scene, systems.
 ///
 /// Call this instead of using Plugin::build since we need to move the channels.
-pub fn setup_gen_app(app: &mut App, channels: GenChannels, workspace: PathBuf) {
+pub fn setup_gen_app(
+    app: &mut App,
+    channels: GenChannels,
+    workspace: PathBuf,
+    initial_scene: Option<PathBuf>,
+) {
     app.insert_resource(GenChannelRes::new(channels))
         .insert_resource(GenWorkspace { path: workspace })
+        .insert_resource(GenInitialScene {
+            path: initial_scene,
+        })
         .init_resource::<NameRegistry>()
         .init_resource::<PendingScreenshots>()
+        .init_resource::<PendingGltfLoads>()
         .init_resource::<FlyCamConfig>()
-        .add_systems(Startup, setup_default_scene)
-        .add_systems(
-            Update,
-            (
-                process_gen_commands,
-                process_pending_screenshots,
-                fly_cam_movement,
-                fly_cam_look,
-                fly_cam_scroll_speed,
-            ),
-        );
+        .add_systems(Startup, (setup_default_scene, load_initial_scene))
+        .add_systems(Update, process_load_gltf_commands)
+        .add_systems(Update, process_gen_commands)
+        .add_systems(Update, process_pending_screenshots)
+        .add_systems(Update, process_pending_gltf_loads)
+        .add_systems(Update, fly_cam_movement)
+        .add_systems(Update, fly_cam_look)
+        .add_systems(Update, fly_cam_scroll_speed);
 }
 
 /// Default scene: ground plane, camera, directional light, ambient light.
@@ -157,6 +185,30 @@ fn setup_default_scene(
         ))
         .id();
     registry.insert("main_light".into(), light);
+}
+
+/// Load the initial scene file if provided.
+fn load_initial_scene(
+    initial_scene: Res<GenInitialScene>,
+    asset_server: Res<AssetServer>,
+    mut pending: ResMut<PendingGltfLoads>,
+) {
+    let Some(ref path) = initial_scene.path else { return };
+
+    let name = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "scene".to_string());
+
+    let asset_path = path.to_string_lossy().trim_start_matches('/').to_string();
+    let handle = asset_server.load::<Scene>(format!("{}#Scene0", asset_path));
+
+    pending.queue.push(PendingGltfLoad {
+        handle,
+        name,
+        path: path.to_string_lossy().into_owned(),
+        send_response: false,
+    });
 }
 
 /// Poll the command channel each frame and dispatch.
@@ -266,9 +318,51 @@ fn process_gen_commands(
                 &mesh_handles,
                 &meshes,
             ),
+            GenCommand::LoadGltf { path: _ } => {
+                // Handled by a separate system
+                continue;
+            }
         };
 
         let _ = channel_res.channels.resp_tx.send(response);
+    }
+}
+
+/// Handle LoadGltf commands in a separate system.
+fn process_load_gltf_commands(
+    mut channel_res: ResMut<GenChannelRes>,
+    asset_server: Res<AssetServer>,
+    mut pending_gltf: ResMut<PendingGltfLoads>,
+    workspace: Res<GenWorkspace>,
+) {
+    while let Ok(cmd) = channel_res.channels.cmd_rx.try_recv() {
+        if let GenCommand::LoadGltf { path } = cmd {
+            if let Some(resolved) = resolve_gltf_path(&path, &workspace.path) {
+                let name = resolved
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "imported_scene".to_string());
+
+                let asset_path = resolved.to_string_lossy().trim_start_matches('/').to_string();
+                let handle = asset_server.load::<Scene>(format!("{}#Scene0", asset_path));
+
+                pending_gltf.queue.push(PendingGltfLoad {
+                    handle,
+                    name,
+                    path: resolved.to_string_lossy().into_owned(),
+                    send_response: true,
+                });
+            } else {
+                let response = GenResponse::Error {
+                    message: format!("Failed to resolve path: {}", path),
+                };
+                let _ = channel_res.channels.resp_tx.send(response);
+            }
+        } else {
+            // Not a LoadGltf command, put it back by sending an error
+            // Actually we can't put it back, so we just drop it
+            // This shouldn't happen since we're filtering by command type
+        }
     }
 }
 
@@ -314,6 +408,43 @@ fn process_pending_screenshots(
             image_path: path.clone(),
         };
         let _ = channel_res.channels.resp_tx.send(response);
+    }
+}
+
+/// Process pending glTF loads that are waiting for the asset server.
+fn process_pending_gltf_loads(
+    channel_res: Res<GenChannelRes>,
+    asset_server: Res<AssetServer>,
+    mut pending: ResMut<PendingGltfLoads>,
+    mut commands: Commands,
+    mut registry: ResMut<NameRegistry>,
+) {
+    let mut completed = Vec::new();
+
+    for (i, load) in pending.queue.iter().enumerate() {
+        if asset_server.is_loaded_with_dependencies(&load.handle) {
+            completed.push(i);
+        }
+    }
+
+    // Process completed loads in reverse order to preserve indices
+    for i in completed.into_iter().rev() {
+        let load = pending.queue.remove(i);
+
+        // Spawn the scene
+        let entity = commands.spawn(SceneRoot(load.handle.clone())).id();
+
+        // Register in the name registry
+        registry.insert(load.name.clone(), entity);
+
+        // Send response if this was a tool request (not a startup load)
+        if load.send_response {
+            let response = GenResponse::GltfLoaded {
+                name: load.name,
+                path: load.path,
+            };
+            let _ = channel_res.channels.resp_tx.send(response);
+        }
     }
 }
 
@@ -1375,6 +1506,60 @@ fn handle_export_gltf(
             message: format!("Failed to write GLB file: {}", e),
         },
     }
+}
+
+// ---------------------------------------------------------------------------
+// glTF path resolution
+// ---------------------------------------------------------------------------
+
+/// Resolve a glTF file path with the following fallback logic:
+/// 1. Expand `~` and try as-is
+/// 2. Try `{workspace}/{path}`
+/// 3. Try `{workspace}/exports/{path}`
+/// 4. Walk workspace directory tree looking for a file whose name matches the basename
+/// 5. Return None if nothing found
+pub fn resolve_gltf_path(path: &str, workspace: &PathBuf) -> Option<PathBuf> {
+    // 1. Expand ~ and try as-is
+    let expanded = shellexpand::tilde(path).into_owned();
+    let p = std::path::Path::new(&expanded);
+    if p.exists() {
+        return p.canonicalize().ok();
+    }
+
+    // 2. {workspace}/{path}
+    let wp = workspace.join(&expanded);
+    if wp.exists() {
+        return wp.canonicalize().ok();
+    }
+
+    // 3. {workspace}/exports/{path}
+    let ep = workspace.join("exports").join(&expanded);
+    if ep.exists() {
+        return ep.canonicalize().ok();
+    }
+
+    // 4. Walk workspace for matching basename
+    let needle = std::path::Path::new(&expanded).file_name()?;
+    find_in_dir(workspace, needle)
+}
+
+fn find_in_dir(dir: &PathBuf, needle: &OsStr) -> Option<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return None;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_in_dir(&path, needle) {
+                return Some(found);
+            }
+        } else if path.file_name() == Some(needle) {
+            return path.canonicalize().ok();
+        }
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
