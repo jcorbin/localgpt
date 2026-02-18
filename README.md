@@ -160,6 +160,10 @@ read = ["/opt/data"]
 write = ["/tmp/scratch"]
 ```
 
+:::note Claude CLI Backend
+If using the Claude CLI as your LLM backend (`agent.default_model = "claude-cli/*"`), the sandbox does not apply to Claude CLI subprocess calls — only to tool-executed shell commands. The subprocess itself runs outside the sandbox with access to your system.
+:::
+
 ```bash
 localgpt sandbox status   # Show sandbox capabilities
 localgpt sandbox test     # Run smoke tests
