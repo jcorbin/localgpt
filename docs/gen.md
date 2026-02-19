@@ -94,3 +94,7 @@ Bevy requires ownership of the main thread (macOS windowing/GPU requirement), so
 - Visual output depends on the LLM's spatial reasoning ability
 - Only geometric primitives are supported (no imported 3D models yet)
 - Requires a GPU-capable display for rendering
+
+## Share Your Creations
+
+Created something awesome with LocalGPT Gen? We'd love to see it! Join the community on [Discord](https://discord.gg/yMQ8tfxG) and share your world generation results — showcase your creative prompts, stunning scenes, and experimental ideas with fellow LocalGPT users.
