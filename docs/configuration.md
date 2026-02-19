@@ -204,17 +204,25 @@ write = []    # e.g., ["/tmp/builds"]
 policy = "deny"   # "deny" or "proxy" (future)
 
 #──────────────────────────────────────────────────────────────────────────────
-# Directives / LocalGPT.md Settings
+# Security Block Settings
 #──────────────────────────────────────────────────────────────────────────────
+# LocalGPT injects a security block at the end of every LLM context window.
+# It has two independent layers:
+#   1. User policy (LocalGPT.md) — your signed custom instructions
+#   2. Hardcoded suffix — compiled-in security reminder (always last)
+# Both are concatenated into the last user message on every API call.
+# They are NOT saved to session logs or included in compaction.
 
 [security]
 # Abort session if LocalGPT.md tamper detected? (default: warn only)
 strict_policy = false
 
-# Skip loading LocalGPT.md entirely
+# Skip loading the LocalGPT.md workspace security policy
+# The hardcoded suffix still applies unless also disabled.
 disable_policy = false
 
-# Skip hardcoded security suffix (NOT recommended)
+# Skip the hardcoded security suffix
+# WARNING: disabling both removes all end-of-context security reinforcement.
 disable_suffix = false
 
 #──────────────────────────────────────────────────────────────────────────────

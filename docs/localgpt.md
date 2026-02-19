@@ -101,6 +101,54 @@ This is by design. `LocalGPT.md` is about shaping behavior over time, setting ex
 
 Think of `LocalGPT.md` as a strong cultural norm — followed naturally and consistently, but backed by real enforcement mechanisms at the infrastructure layer where it matters most.
 
+## How the security block is injected
+
+Every time the AI is about to respond, LocalGPT builds a message array for the LLM API call. The security block (your policy + hardcoded suffix) is **concatenated into the last user or tool-result message** in the array — it is not sent as a separate message. This avoids consecutive same-role messages, which some LLM APIs (notably Anthropic) reject.
+
+The security block has two independent layers:
+
+| Layer | Source | Configurable | Position |
+|-------|--------|-------------|----------|
+| **User policy** | `LocalGPT.md` (signed) | `security.disable_policy` | Before suffix |
+| **Hardcoded suffix** | Compiled into binary | `security.disable_suffix` | Always last |
+
+The resulting text is appended to the last message with a `\n\n` separator. It is **not saved** to session logs, **not included** in compaction/summarization, and **not visible** in session transcripts — it exists only in the API call payload.
+
+## Disabling the security block
+
+Both layers can be independently disabled in `~/.localgpt/config.toml`:
+
+```toml
+[security]
+# Skip loading LocalGPT.md workspace policy (default: false)
+# The hardcoded suffix still applies.
+disable_policy = false
+
+# Skip the hardcoded security suffix (default: false)
+# The user policy still applies.
+disable_suffix = false
+```
+
+| `disable_policy` | `disable_suffix` | Result |
+|---|---|---|
+| `false` | `false` | Full security block (policy + suffix) |
+| `true` | `false` | Hardcoded suffix only |
+| `false` | `true` | User policy only |
+| `true` | `true` | No security block injected |
+
+:::warning
+Setting both to `true` removes all end-of-context security reinforcement. The system prompt safety section still exists, but may lose effectiveness in long sessions due to the "lost in the middle" attention decay effect.
+:::
+
+You can also control how strictly tamper detection is handled:
+
+```toml
+[security]
+# Abort agent startup on tamper or suspicious content (default: false)
+# When false (default), the agent warns and falls back to hardcoded suffix only.
+strict_policy = false
+```
+
 ## Quick reference
 
 | | |
