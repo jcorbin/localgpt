@@ -581,10 +581,16 @@ impl Agent {
         let security_block = crate::security::build_ending_security_block(policy, include_suffix);
 
         if !security_block.is_empty() {
+            let security_role = Role::System;
+
             // Concatenate into the last User or Tool message to avoid
             // consecutive same-role messages (Anthropic API requirement).
             let appended = if let Some(last) = messages.last_mut() {
-                matches!(last.role, Role::User | Role::Tool)
+                if security_role == Role::User {
+                    matches!(last.role, Role::System)
+                } else {
+                    matches!(last.role, Role::User | Role::Tool)
+                }
             } else {
                 false
             };
@@ -596,7 +602,7 @@ impl Agent {
             } else {
                 // Fallback: no messages or last message is Assistant/System
                 messages.push(Message {
-                    role: Role::User,
+                    role: security_role,
                     content: security_block,
                     tool_calls: None,
                     tool_call_id: None,
