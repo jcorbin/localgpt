@@ -35,7 +35,7 @@ cargo run -p localgpt-gen -- -s model.glb          # Load existing scene
 cargo run -p localgpt-gen -- -v                    # Verbose logging
 
 # Headless build (no desktop GUI)
-cargo build -p localgpt-cli --no-default-features
+cargo build -p localgpt --no-default-features
 
 # Generate UniFFI bindings (after building mobile crate)
 cargo build -p localgpt-mobile
@@ -56,7 +56,7 @@ LocalGPT is a local-only AI assistant with persistent markdown-based memory and 
 ```
 crates/
 ├── core/      # localgpt-core — shared library (agent, memory, config, security)
-├── cli/       # localgpt-cli — binary with clap CLI, desktop GUI, dangerous tools
+├── cli/       # localgpt — binary with clap CLI, desktop GUI, dangerous tools
 ├── server/    # localgpt-server — HTTP/WS API, Telegram bot, optional WASM web UI
 ├── sandbox/   # localgpt-sandbox — Landlock/Seatbelt process sandboxing
 ├── mobile/    # localgpt-mobile — UniFFI bindings for iOS/Android
@@ -68,7 +68,7 @@ mobile/        # Non-Rust: iOS build scripts, Android gradle config
 ### Dependency Graph
 
 ```
-localgpt-cli ──→ localgpt-core
+localgpt ──→ localgpt-core
              ──→ localgpt-server ──→ localgpt-core
              ──→ localgpt-sandbox ──→ localgpt-core
 

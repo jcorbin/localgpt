@@ -1,5 +1,5 @@
 [package]
-name = "localgpt-cli"
+name = "localgpt"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "LocalGPT HTTP server and Telegram bot"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]

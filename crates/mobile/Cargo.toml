@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "LocalGPT mobile bindings via UniFFI"
+publish = false
 
 [lib]
 crate-type = ["staticlib", "cdylib"]

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Core library for LocalGPT — agent, memory, config, security"
+publish = false
 
 [features]
 default = ["embeddings-local", "claude-cli"]
