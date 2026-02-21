@@ -15,6 +15,8 @@ tarpc = { version = "0.37.0", features = ["tokio1", "serde-transport"] }
 tokio-serde = { version = "0.9", features = ["json"] }
 futures = "0.3"
 tokio-util = { version = "0.7", features = ["codec", "compat"] }
+clap = { version = "4.5.60", features = ["derive"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["socket", "uio", "user"] }
