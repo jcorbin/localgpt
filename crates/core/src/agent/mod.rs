@@ -658,7 +658,7 @@ impl Agent {
                     self.session.add_message(Message {
                         role: Role::Assistant,
                         content: String::new(),
-                        tool_calls: Some(calls),
+                        tool_calls: Some(calls.clone()),
                         tool_call_id: None,
                         images: Vec::new(),
                     });
