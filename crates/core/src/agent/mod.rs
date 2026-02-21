@@ -644,62 +644,60 @@ impl Agent {
     /// Used by the heartbeat runner so the session log is visible while the heartbeat is running.
     async fn handle_response_saving_session(
         &mut self,
-        response: LLMResponse,
+        mut response: LLMResponse,
         agent_id: &str,
     ) -> Result<String> {
-        // Track usage
-        self.add_usage(response.usage);
+        loop {
+            // Track usage
+            self.add_usage(response.usage);
 
-        match response.content {
-            LLMResponseContent::Text(text) => Ok(text),
-            LLMResponseContent::ToolCalls(calls) => {
-                // Add and save intent to call tools so it's visible during a long run
-                self.session.add_message(Message {
-                    role: Role::Assistant,
-                    content: String::new(),
-                    tool_calls: Some(calls),
-                    tool_call_id: None,
-                    images: Vec::new(),
-                });
-                if let Err(e) = self.session.save_for_agent(agent_id) {
-                    debug!("Incremental session save failed: {}", e);
-                }
-
-                // Execute each tool call, saving session after each so that partial it's visible
-                // during a long run, even partial progress if interrupted
-                for call in &calls {
-                    debug!(
-                        "Executing tool: {} with args: {}",
-                        call.name, call.arguments
-                    );
-
-                    let result = self.execute_tool(call).await;
+            match response.content {
+                LLMResponseContent::Text(text) => return Ok(text),
+                LLMResponseContent::ToolCalls(calls) => {
+                    // Add and save intent to call tools so it's visible during a long run
                     self.session.add_message(Message {
-                        role: Role::Tool,
-                        content: match result {
-                            Ok((content, _warnings)) => content.clone(),
-                            Err(e) => format!("Error: {}", e),
-                        },
-                        tool_calls: None,
-                        tool_call_id: Some(call.id.clone()),
+                        role: Role::Assistant,
+                        content: String::new(),
+                        tool_calls: Some(calls),
+                        tool_call_id: None,
                         images: Vec::new(),
                     });
                     if let Err(e) = self.session.save_for_agent(agent_id) {
                         debug!("Incremental session save failed: {}", e);
                     }
+
+                    // Execute each tool call, saving session after each so that partial it's visible
+                    // during a long run, even partial progress if interrupted
+                    for call in &calls {
+                        debug!(
+                            "Executing tool: {} with args: {}",
+                            call.name, call.arguments
+                        );
+
+                        let result = self.execute_tool(call).await;
+                        self.session.add_message(Message {
+                            role: Role::Tool,
+                            content: match result {
+                                Ok((content, _warnings)) => content.clone(),
+                                Err(e) => format!("Error: {}", e),
+                            },
+                            tool_calls: None,
+                            tool_call_id: Some(call.id.clone()),
+                            images: Vec::new(),
+                        });
+                        if let Err(e) = self.session.save_for_agent(agent_id) {
+                            debug!("Incremental session save failed: {}", e);
+                        }
+                    }
+
+                    // Continue conversation with tool results (with per-turn security block)
+                    let messages = self.messages_for_api_call();
+                    let tool_schemas = self.tool_schemas_for_provider();
+                    response = self
+                        .provider
+                        .chat(&messages, Some(tool_schemas.as_slice()))
+                        .await?;
                 }
-
-                // Continue conversation with tool results (with per-turn security block)
-                let messages = self.messages_for_api_call();
-                let tool_schemas = self.tool_schemas_for_provider();
-                let next_response = self
-                    .provider
-                    .chat(&messages, Some(tool_schemas.as_slice()))
-                    .await?;
-
-                // Recursively handle (in case of more tool calls)
-                Box::pin(self.handle_response_saving_session(next_response, agent_id)).await
-                // TODO does rust have a recursion limit? or is this properly tail-call-eliminated?
             }
         }
     }
