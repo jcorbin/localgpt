@@ -1,0 +1,24 @@
+[package]
+name = "localgpt-bridge-telegram"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+localgpt-core = { path = "../core" }
+localgpt-bridge = { path = "../bridge" }
+
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+
+# RPC
+tarpc = { version = "0.37", features = ["tokio1", "serde-transport"] }
+
+# Telegram
+teloxide = { version = "0.17", features = ["macros"] }
+# dptree is re-exported by teloxide
