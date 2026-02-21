@@ -2,18 +2,11 @@ pub mod protocol;
 pub mod peer_identity;
 
 pub use interprocess::local_socket::tokio::{LocalSocketListener, LocalSocketStream};
-#[cfg(unix)]
-use std::os::unix::io::AsRawFd;
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
-
-use crate::peer_identity::{PeerIdentity, get_peer_identity};
 
 // Re-export protocol
 pub use protocol::{BridgeService, BridgeServiceClient, BridgeError};
 
 use tarpc::server::{BaseChannel, Channel};
-use tokio::io::{AsyncRead, AsyncWrite};
 use futures::StreamExt;
 
 pub struct BridgeServer;

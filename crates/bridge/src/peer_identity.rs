@@ -1,5 +1,3 @@
-use std::io;
-
 #[derive(Debug, Clone, Copy)]
 pub struct PeerIdentity {
     pub uid: Option<u32>,

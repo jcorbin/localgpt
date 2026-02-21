@@ -1,5 +1,6 @@
 pub mod ask;
 pub mod auth;
+pub mod bridge;
 pub mod chat;
 pub mod config;
 pub mod daemon;
@@ -81,4 +82,7 @@ pub enum Commands {
 
     /// Authenticate with providers (Gemini, etc.)
     Auth(auth::AuthArgs),
+
+    /// Manage bridges and credentials
+    Bridge(bridge::BridgeArgs),
 }
