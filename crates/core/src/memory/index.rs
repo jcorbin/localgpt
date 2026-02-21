@@ -134,6 +134,7 @@ impl MemoryIndex {
     }
 
     /// Try to load sqlite-vec extension
+    #[cfg(feature = "sqlite-vec")]
     #[allow(unsafe_code)]
     fn try_load_sqlite_vec(conn: &Connection) -> bool {
         // sqlite-vec provides the extension as a loadable module
@@ -162,6 +163,11 @@ impl MemoryIndex {
         }
 
         let _ = conn.load_extension_disable();
+        false
+    }
+
+    #[cfg(not(feature = "sqlite-vec"))]
+    fn try_load_sqlite_vec(_conn: &Connection) -> bool {
         false
     }
 

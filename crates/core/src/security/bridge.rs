@@ -187,14 +187,12 @@ impl BridgeManager {
                     #[cfg(unix)]
                     {
                         let current_uid = unsafe { libc::getuid() };
-                        if let Some(peer_uid) = id.uid {
-                            if peer_uid != current_uid {
-                                error!(
-                                    "Rejected connection from UID {} (expected {})",
-                                    peer_uid, current_uid
-                                );
-                                continue;
-                            }
+                        if let Some(peer_uid) = id.uid.filter(|&uid| uid != current_uid) {
+                            error!(
+                                "Rejected connection from UID {} (expected {})",
+                                peer_uid, current_uid
+                            );
+                            continue;
                         }
                     }
                     id

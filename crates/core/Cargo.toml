@@ -8,7 +8,7 @@ description = "Core library for LocalGPT — agent, memory, config, security"
 publish = false
 
 [features]
-default = ["embeddings-local", "claude-cli"]
+default = ["embeddings-local", "claude-cli", "sqlite-vec"]
 # Local embeddings via fastembed (ONNX). Desktop default.
 embeddings-local = ["fastembed"]
 # Claude CLI provider (requires subprocess execution — not available on mobile)
@@ -19,6 +19,8 @@ embeddings-gguf = ["llama-cpp-2"]
 embeddings-openai = []
 # Disable all embeddings — FTS5 keyword search only
 embeddings-none = []
+# Sqlite vector search extension (requires native build, disable for mobile)
+sqlite-vec = ["dep:sqlite-vec"]
 # Legacy alias
 gguf = ["embeddings-gguf"]
 
@@ -26,7 +28,7 @@ gguf = ["embeddings-gguf"]
 tokio = { workspace = true }
 reqwest = { workspace = true }
 rusqlite = { workspace = true }
-sqlite-vec = { workspace = true }
+sqlite-vec = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
