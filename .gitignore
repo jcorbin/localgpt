@@ -26,4 +26,3 @@ target
 .*
 !.gitignore
 !.github/
-\n# Website dependencies\nwebsite/node_modules/
