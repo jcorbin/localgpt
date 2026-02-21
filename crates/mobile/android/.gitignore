@@ -1,0 +1,9 @@
+# Android Build Artifacts
+LocalGPTLib/src/main/jniLibs/
+LocalGPTLib/src/main/java/uniffi/
+LocalGPTLib/build/
+LocalGPTApp/build/
+
+# General
+.DS_Store
+*.so

@@ -29,6 +29,9 @@ target
 
 # Compiled libraries
 *.a
+*.so
+*.dylib
+*.dll
 
 # Website dependencies
 website/node_modules/

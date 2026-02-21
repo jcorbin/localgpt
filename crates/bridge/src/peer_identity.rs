@@ -17,7 +17,7 @@ mod unix {
     use std::io;
     use std::os::unix::io::AsRawFd;
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     pub fn get_peer_identity<T: AsRawFd>(stream: &T) -> io::Result<PeerIdentity> {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
         use std::os::fd::BorrowedFd;
