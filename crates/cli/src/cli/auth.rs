@@ -156,12 +156,12 @@ fn wait_for_callback(port: u16, expected_state: &str) -> Result<String> {
                 }
             }
 
-            if let Some(state_val) = state {
-                if state_val != expected_state {
-                    let response = "HTTP/1.1 400 Bad Request\r\n\r\nInvalid state parameter.";
-                    stream.write_all(response.as_bytes())?;
-                    anyhow::bail!("Invalid state parameter received.");
-                }
+            if let Some(state_val) = state
+                && state_val != expected_state
+            {
+                let response = "HTTP/1.1 400 Bad Request\r\n\r\nInvalid state parameter.";
+                stream.write_all(response.as_bytes())?;
+                anyhow::bail!("Invalid state parameter received.");
             }
 
             if let Some(code_val) = code {
@@ -198,7 +198,7 @@ async fn exchange_code(
         ("code_verifier", verifier),
     ];
 
-    let body = serde_urlencoded::to_string(&params)?;
+    let body = serde_urlencoded::to_string(params)?;
 
     let response = client
         .post("https://oauth2.googleapis.com/token")
