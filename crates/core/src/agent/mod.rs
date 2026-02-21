@@ -653,27 +653,7 @@ impl Agent {
         match response.content {
             LLMResponseContent::Text(text) => Ok(text),
             LLMResponseContent::ToolCalls(calls) => {
-                // Execute tool calls
-                let mut results = Vec::new();
-
-                for call in &calls {
-                    debug!(
-                        "Executing tool: {} with args: {}",
-                        call.name, call.arguments
-                    );
-
-                    let result = self.execute_tool(call).await;
-                    let output = match result {
-                        Ok((content, _warnings)) => content,
-                        Err(e) => format!("Error: {}", e),
-                    };
-                    results.push(ToolResult {
-                        call_id: call.id.clone(),
-                        output,
-                    });
-                }
-
-                // Add tool call message
+                // Add and save intent to call tools so it's visible during a long run
                 self.session.add_message(Message {
                     role: Role::Assistant,
                     content: String::new(),
@@ -681,21 +661,32 @@ impl Agent {
                     tool_call_id: None,
                     images: Vec::new(),
                 });
-
-                // Add tool results
-                for result in &results {
-                    self.session.add_message(Message {
-                        role: Role::Tool,
-                        content: result.output.clone(),
-                        tool_calls: None,
-                        tool_call_id: Some(result.call_id.clone()),
-                        images: Vec::new(),
-                    });
-                }
-
-                // Save session after each tool call round so it's visible during a long run
                 if let Err(e) = self.session.save_for_agent(agent_id) {
                     debug!("Incremental session save failed: {}", e);
+                }
+
+                // Execute each tool call, saving session after each so that partial it's visible
+                // during a long run, even partial progress if interrupted
+                for call in &calls {
+                    debug!(
+                        "Executing tool: {} with args: {}",
+                        call.name, call.arguments
+                    );
+
+                    let result = self.execute_tool(call).await;
+                    self.session.add_message(Message {
+                        role: Role::Tool,
+                        content: match result {
+                            Ok((content, _warnings)) => content.clone(),
+                            Err(e) => format!("Error: {}", e),
+                        },
+                        tool_calls: None,
+                        tool_call_id: Some(call.id.clone()),
+                        images: Vec::new(),
+                    });
+                    if let Err(e) = self.session.save_for_agent(agent_id) {
+                        debug!("Incremental session save failed: {}", e);
+                    }
                 }
 
                 // Continue conversation with tool results (with per-turn security block)
@@ -715,7 +706,7 @@ impl Agent {
     /// Like `chat`, but saves the session log to `agent_id`'s sessions directory after each
     /// tool call round. Used by the heartbeat runner so in-progress sessions are visible.
     pub async fn chat_saving_session(&mut self, message: &str, agent_id: &str) -> Result<String> {
-        // Add user message
+        // Add user message and start out saved session file
         self.session.add_message(Message {
             role: Role::User,
             content: message.to_string(),
@@ -723,17 +714,28 @@ impl Agent {
             tool_call_id: None,
             images: Vec::new(),
         });
+        if let Err(e) = self.session.save_for_agent(agent_id) {
+            debug!("Incremental session save failed: {}", e);
+        }
 
         // Check if we should run pre-compaction memory flush (soft threshold)
         if self.should_memory_flush() {
             info!("Running pre-compaction memory flush (soft threshold)");
             self.memory_flush().await?;
+            if let Err(e) = self.session.save_for_agent(agent_id) {
+                debug!("Incremental session save failed: {}", e);
+            }
         }
 
         // Check if we need to compact (hard limit)
         if self.should_compact() {
             self.compact_session().await?;
+            if let Err(e) = self.session.save_for_agent(agent_id) {
+                debug!("Incremental session save failed: {}", e);
+            }
         }
+
+        // TODO y u no save
 
         // Build messages for LLM (with per-turn security block)
         let messages = self.messages_for_api_call();
@@ -760,6 +762,9 @@ impl Agent {
             tool_call_id: None,
             images: Vec::new(),
         });
+        if let Err(e) = self.session.save_for_agent(agent_id) {
+            debug!("Incremental session save failed: {}", e);
+        }
 
         Ok(final_response)
     }
