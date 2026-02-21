@@ -699,6 +699,7 @@ impl Agent {
 
                 // Recursively handle (in case of more tool calls)
                 Box::pin(self.handle_response_saving_session(next_response, agent_id)).await
+                // TODO does rust have a recursion limit? or is this properly tail-call-eliminated?
             }
         }
     }
