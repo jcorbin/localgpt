@@ -8,6 +8,14 @@ The bridge architecture consists of two parts:
 1.  **Server (`localgpt daemon`)**: Holds the master key, verifies identities, and dispenses credentials.
 2.  **Client (Bridge Binary)**: Connects to the server, proves its identity, and receives its specific secrets (e.g., API tokens).
 
+## Versioning & Distribution
+
+To ensure stability and decouple development cycles, adhere to the following versioning strategy:
+
+1.  **Independent Versioning:** Each bridge binary (e.g., `localgpt-bridge-telegram`) should have its own semantic version (starting at `0.1.0`). Updates to a bridge do not require a version bump of the core system.
+2.  **Protocol Compatibility:** All bridges must depend on a compatible version of the `localgpt-bridge` library (the IPC layer). This library defines the wire protocol.
+3.  **Distribution:** The `localgpt-bridge` library will eventually be published to crates.io to allow the community to build third-party bridges without forking the main repository.
+
 ## Prerequisites
 
 Ensure you have built the project:
@@ -20,8 +28,14 @@ cargo build
 
 You can verify the entire secure credential flow using the included `test-bridge` binary.
 
-### 1. Register a Credential
-First, securely store a secret for your bridge. This uses the main CLI to encrypt the secret with the device master key.
+### 1. Initialize
+Generate the device master key if you haven't already.
+```bash
+cargo run -- init
+```
+
+### 2. Register a Credential
+Securely store a secret for your bridge. This uses the main CLI to encrypt the secret with the device master key.
 
 ```bash
 # Register a dummy secret for the bridge ID "test-bridge"
@@ -29,7 +43,7 @@ First, securely store a secret for your bridge. This uses the main CLI to encryp
 cargo run -- bridge register --id test-bridge --secret "super-secret-token-123"
 ```
 
-### 2. Start the Daemon
+### 3. Start the Daemon
 The daemon hosts the secure IPC socket. Run it in the foreground to monitor logs and verify the socket path.
 
 ```bash
@@ -43,7 +57,7 @@ cargo run -- daemon start --foreground
 On **macOS**, this path depends on your `TMPDIR` and typically looks like:
 `/var/folders/xx/xxxx/T/localgpt-501/bridge.sock`
 
-### 3. Run the Bridge Client
+### 4. Run the Bridge Client
 In a **new terminal**, run the test client. It will connect to the daemon, authenticate, and request the secret for "test-bridge".
 
 **macOS / Linux:**
@@ -79,7 +93,7 @@ INFO Accepted connection from: PeerIdentity { uid: Some(501), ... }
 
 To create a new bridge (e.g., `localgpt-bridge-telegram`):
 
-1.  **New Binary**: Create a new crate or binary target in `crates/bridge/src/bin/`.
+1.  **New Binary**: Create a new crate or binary target in `crates/bridge/src/bin/` or a separate repository.
 2.  **Dependencies**: Depend on `localgpt-bridge` and `tarpc`.
 3.  **Connect**: Use `localgpt_bridge::connect(socket_path)` to establish the secure channel.
 4.  **Authenticate**: Call `client.get_credentials(context, "my-bridge-id")`.
