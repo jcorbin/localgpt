@@ -58,9 +58,10 @@ rand = "0.10"
 base64 = "0.22"
 
 # Internal crates
-localgpt-core = { path = "crates/core" }
-localgpt-server = { path = "crates/server" }
-localgpt-sandbox = { path = "crates/sandbox" }
+localgpt-core = { version = "0.3.0", path = "crates/core" }
+localgpt-server = { version = "0.3.0", path = "crates/server" }
+localgpt-sandbox = { version = "0.3.0", path = "crates/sandbox" }
+localgpt-bridge = { version = "0.3.0", path = "crates/bridge" }
 
 [profile.release]
 lto = true

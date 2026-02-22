@@ -1,12 +1,12 @@
 [package]
 name = "localgpt-bridge-telegram"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 license.workspace = true
 
 [dependencies]
-localgpt-core = { path = "../../crates/core" }
-localgpt-bridge = { path = "../../crates/bridge" }
+localgpt-core = { workspace = true }
+localgpt-bridge = { workspace = true }
 
 tokio = { workspace = true }
 anyhow = { workspace = true }

@@ -10,11 +10,11 @@
 
 use anyhow::Result;
 use axum::{
+    Router,
     extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Router,
 };
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};

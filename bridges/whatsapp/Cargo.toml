@@ -1,7 +1,7 @@
 [package]
 name = "localgpt-bridge-whatsapp"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 license.workspace = true
 
 [dependencies]
@@ -20,7 +20,7 @@ rand = "0.10"
 tarpc = { version = "0.37.0", features = ["tokio1", "serde-transport"] }
 
 [dependencies.localgpt-bridge]
-path = "../../crates/bridge"
+workspace = true
 
 [dependencies.localgpt-core]
-path = "../../crates/core"
+workspace = true

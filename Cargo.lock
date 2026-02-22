@@ -5564,7 +5564,7 @@ dependencies = [
 
 [[package]]
 name = "localgpt-bridge"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5586,7 +5586,7 @@ dependencies = [
 
 [[package]]
 name = "localgpt-bridge-discord"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5605,7 +5605,7 @@ dependencies = [
 
 [[package]]
 name = "localgpt-bridge-telegram"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5624,7 +5624,7 @@ dependencies = [
 
 [[package]]
 name = "localgpt-bridge-whatsapp"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
