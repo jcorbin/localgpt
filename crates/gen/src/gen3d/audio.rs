@@ -14,7 +14,7 @@ use std::sync::mpsc;
 use bevy::prelude::*;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
-use fundsp::hacker::*;
+use fundsp::prelude::*;
 
 use super::audio_graphs;
 use super::commands::*;
@@ -145,7 +145,7 @@ fn audio_thread_main(rx: mpsc::Receiver<AudioGraphUpdate>, master_vol: Shared) {
         }
     };
 
-    let sample_rate = supported_config.sample_rate().0 as f64;
+    let sample_rate = supported_config.sample_rate() as f64;
     let channels = supported_config.channels() as usize;
     let config = supported_config.config();
 

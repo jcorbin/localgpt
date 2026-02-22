@@ -9,6 +9,7 @@ use serde_json::json;
 const BASE_URL: &str = "http://127.0.0.1:32123";
 
 /// Get the current state of the connected avatar.
+#[derive(Default)]
 pub struct GetAvatarStateTool;
 
 impl GetAvatarStateTool {
@@ -64,6 +65,7 @@ enum ApiCommand {
 }
 
 /// Control the avatar's movement.
+#[derive(Default)]
 pub struct MoveAvatarTool;
 
 impl MoveAvatarTool {
@@ -136,6 +138,7 @@ impl Tool for MoveAvatarTool {
 }
 
 /// Control the avatar's view/rotation.
+#[derive(Default)]
 pub struct LookAvatarTool;
 
 impl LookAvatarTool {
@@ -196,6 +199,7 @@ impl Tool for LookAvatarTool {
 }
 
 /// Teleport the avatar to a specific H3 index.
+#[derive(Default)]
 pub struct TeleportAvatarTool;
 
 impl TeleportAvatarTool {

@@ -155,6 +155,16 @@ pub struct OAuthTokenUpdate {
     pub expires_at: Option<u64>,
 }
 
+/// Common OAuth configuration for providers
+pub struct OAuthConfig {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
+    pub expires_at: Option<u64>,
+    pub base_url: String,
+}
+
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
     /// Get provider name
@@ -285,12 +295,14 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
             if let Some(oauth_config) = &config.providers.anthropic_oauth {
                 let full_model = normalize_model_id("anthropic", &model_id);
                 Ok(Box::new(AnthropicOAuthProvider::new(
-                    &oauth_config.access_token,
-                    oauth_config.refresh_token.clone(),
-                    oauth_config.client_id.clone(),
-                    oauth_config.client_secret.clone(),
-                    oauth_config.expires_at,
-                    &oauth_config.base_url,
+                    OAuthConfig {
+                        access_token: oauth_config.access_token.clone(),
+                        refresh_token: oauth_config.refresh_token.clone(),
+                        client_id: oauth_config.client_id.clone(),
+                        client_secret: oauth_config.client_secret.clone(),
+                        expires_at: oauth_config.expires_at,
+                        base_url: oauth_config.base_url.clone(),
+                    },
                     &full_model,
                     config.agent.max_tokens,
                 )?))
@@ -322,12 +334,14 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
             // Prefer OAuth config if available
             if let Some(oauth_config) = &config.providers.openai_oauth {
                 Ok(Box::new(OpenAIOAuthProvider::new(
-                    &oauth_config.access_token,
-                    oauth_config.refresh_token.clone(),
-                    oauth_config.client_id.clone(),
-                    oauth_config.client_secret.clone(),
-                    oauth_config.expires_at,
-                    &oauth_config.base_url,
+                    OAuthConfig {
+                        access_token: oauth_config.access_token.clone(),
+                        refresh_token: oauth_config.refresh_token.clone(),
+                        client_id: oauth_config.client_id.clone(),
+                        client_secret: oauth_config.client_secret.clone(),
+                        expires_at: oauth_config.expires_at,
+                        base_url: oauth_config.base_url.clone(),
+                    },
                     &model_id,
                 )?))
             } else {
@@ -435,12 +449,14 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
             })?;
 
             Ok(Box::new(GeminiOAuthProvider::new(
-                &gemini_config.access_token,
-                gemini_config.refresh_token.clone(),
-                gemini_config.client_id.clone(),
-                gemini_config.client_secret.clone(),
-                gemini_config.expires_at,
-                &gemini_config.base_url,
+                OAuthConfig {
+                    access_token: gemini_config.access_token.clone(),
+                    refresh_token: gemini_config.refresh_token.clone(),
+                    client_id: gemini_config.client_id.clone(),
+                    client_secret: gemini_config.client_secret.clone(),
+                    expires_at: gemini_config.expires_at,
+                    base_url: gemini_config.base_url.clone(),
+                },
                 &model_id,
                 gemini_config.project_id.as_deref(),
             )?))
@@ -2540,24 +2556,15 @@ pub struct AnthropicOAuthProvider {
 }
 
 impl AnthropicOAuthProvider {
-    pub fn new(
-        access_token: &str,
-        refresh_token: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-        expires_at: Option<u64>,
-        base_url: &str,
-        model: &str,
-        max_tokens: usize,
-    ) -> Result<Self> {
+    pub fn new(config: OAuthConfig, model: &str, max_tokens: usize) -> Result<Self> {
         Ok(Self {
             client: Client::new(),
-            access_token: std::sync::Arc::new(std::sync::RwLock::new(access_token.to_string())),
-            refresh_token,
-            client_id,
-            client_secret,
-            expires_at: std::sync::Arc::new(std::sync::RwLock::new(expires_at)),
-            base_url: base_url.to_string(),
+            access_token: std::sync::Arc::new(std::sync::RwLock::new(config.access_token)),
+            refresh_token: config.refresh_token,
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            expires_at: std::sync::Arc::new(std::sync::RwLock::new(config.expires_at)),
+            base_url: config.base_url,
             model: model.to_string(),
             max_tokens,
         })
@@ -2825,7 +2832,7 @@ impl LLMProvider for AnthropicOAuthProvider {
             .send()
             .await?;
 
-        let mut status = response.status();
+        let status = response.status();
         let response =
             if status == reqwest::StatusCode::UNAUTHORIZED && self.refresh_token.is_some() {
                 debug!("Anthropic OAuth returned 401 Unauthorized, attempting to refresh token...");
@@ -2836,18 +2843,14 @@ impl LLMProvider for AnthropicOAuthProvider {
                     .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on access_token"))?
                     .clone();
 
-                let retry_response = self
-                    .client
+                self.client
                     .post(format!("{}/v1/messages", self.base_url))
                     .header("Authorization", format!("Bearer {}", new_access_token))
                     .header("anthropic-version", "2023-06-01")
                     .header("Content-Type", "application/json")
                     .json(&body)
                     .send()
-                    .await?;
-
-                status = retry_response.status();
-                retry_response
+                    .await?
             } else {
                 response
             };
@@ -2934,16 +2937,7 @@ pub struct GeminiOAuthProvider {
 }
 
 impl GeminiOAuthProvider {
-    pub fn new(
-        access_token: &str,
-        refresh_token: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-        expires_at: Option<u64>,
-        base_url: &str,
-        model: &str,
-        project_id: Option<&str>,
-    ) -> Result<Self> {
+    pub fn new(config: OAuthConfig, model: &str, project_id: Option<&str>) -> Result<Self> {
         let client = Client::builder()
             .http1_only()
             .timeout(std::time::Duration::from_secs(60))
@@ -2951,12 +2945,12 @@ impl GeminiOAuthProvider {
 
         Ok(Self {
             client,
-            access_token: std::sync::Arc::new(std::sync::RwLock::new(access_token.to_string())),
-            refresh_token,
-            client_id,
-            client_secret,
-            expires_at: std::sync::Arc::new(std::sync::RwLock::new(expires_at)),
-            base_url: base_url.to_string(),
+            access_token: std::sync::Arc::new(std::sync::RwLock::new(config.access_token)),
+            refresh_token: config.refresh_token,
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            expires_at: std::sync::Arc::new(std::sync::RwLock::new(config.expires_at)),
+            base_url: config.base_url,
             model: model.to_string(),
             project_id: project_id.map(|s| s.to_string()),
         })
@@ -3342,23 +3336,15 @@ pub struct OpenAIOAuthProvider {
 }
 
 impl OpenAIOAuthProvider {
-    pub fn new(
-        access_token: &str,
-        refresh_token: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-        expires_at: Option<u64>,
-        base_url: &str,
-        model: &str,
-    ) -> Result<Self> {
+    pub fn new(config: OAuthConfig, model: &str) -> Result<Self> {
         Ok(Self {
             client: Client::new(),
-            access_token: std::sync::Arc::new(std::sync::RwLock::new(access_token.to_string())),
-            refresh_token,
-            client_id,
-            client_secret,
-            expires_at: std::sync::Arc::new(std::sync::RwLock::new(expires_at)),
-            base_url: base_url.to_string(),
+            access_token: std::sync::Arc::new(std::sync::RwLock::new(config.access_token)),
+            refresh_token: config.refresh_token,
+            client_id: config.client_id,
+            client_secret: config.client_secret,
+            expires_at: std::sync::Arc::new(std::sync::RwLock::new(config.expires_at)),
+            base_url: config.base_url,
             model: model.to_string(),
         })
     }
@@ -3593,7 +3579,7 @@ impl LLMProvider for OpenAIOAuthProvider {
             .send()
             .await?;
 
-        let mut status = response.status();
+        let status = response.status();
         let response =
             if status == reqwest::StatusCode::UNAUTHORIZED && self.refresh_token.is_some() {
                 debug!("OpenAI OAuth returned 401 Unauthorized, attempting to refresh token...");
@@ -3604,17 +3590,13 @@ impl LLMProvider for OpenAIOAuthProvider {
                     .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on access_token"))?
                     .clone();
 
-                let retry_response = self
-                    .client
+                self.client
                     .post(format!("{}/chat/completions", self.base_url))
                     .header("Authorization", format!("Bearer {}", new_access_token))
                     .header("Content-Type", "application/json")
                     .json(&body)
                     .send()
-                    .await?;
-
-                status = retry_response.status();
-                retry_response
+                    .await?
             } else {
                 response
             };
@@ -3951,8 +3933,17 @@ impl LLMProvider for GitHubCopilotProvider {
             .clone();
 
         // GitHub Copilot uses OpenAI-compatible API
-        let openai_provider =
-            OpenAIOAuthProvider::new(&token, None, None, None, None, &base_url, &self.model)?;
+        let openai_provider = OpenAIOAuthProvider::new(
+            OAuthConfig {
+                access_token: token,
+                refresh_token: None,
+                client_id: None,
+                client_secret: None,
+                expires_at: None,
+                base_url,
+            },
+            &self.model,
+        )?;
 
         openai_provider.chat(messages, tools).await
     }
@@ -3965,8 +3956,17 @@ impl LLMProvider for GitHubCopilotProvider {
             .map_err(|_| anyhow::anyhow!("Lock error"))?
             .clone();
 
-        let openai_provider =
-            OpenAIOAuthProvider::new(&token, None, None, None, None, &base_url, &self.model)?;
+        let openai_provider = OpenAIOAuthProvider::new(
+            OAuthConfig {
+                access_token: token,
+                refresh_token: None,
+                client_id: None,
+                client_secret: None,
+                expires_at: None,
+                base_url,
+            },
+            &self.model,
+        )?;
 
         openai_provider.summarize(text).await
     }

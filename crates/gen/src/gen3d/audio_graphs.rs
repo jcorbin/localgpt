@@ -8,7 +8,7 @@
 
 #![allow(clippy::precedence)]
 
-use fundsp::hacker::*;
+use fundsp::prelude::*;
 
 use super::commands::{AmbientSound, EmitterSound, FilterType, WaveformType};
 
@@ -37,8 +37,9 @@ fn build_wind(speed: f32, gustiness: f32) -> Box<dyn AudioUnit> {
     let base_cutoff = 200.0 + speed as f64 * 1000.0;
     let lfo_depth = gustiness as f64 * 400.0;
     Box::new(
-        (pink() | lfo(move |t| (base_cutoff + lfo_depth * sin_hz(0.12, t)).max(100.0)))
-            >> lowpole(),
+        (pink::<f32>() | lfo(move |t| (base_cutoff + lfo_depth * sin_hz(0.12, t)).max(100.0)))
+            >> (pass() + pass())
+            >> lowpole_hz(2000.0),
     )
 }
 
@@ -61,12 +62,12 @@ fn build_forest(bird_density: f32, wind_level: f32) -> Box<dyn AudioUnit> {
     let bird_f64 = bird_density as f64 * 0.15;
     let mut net = Net::new(0, 1);
 
-    let wind_layer = pink() * wind_vol;
+    let wind_layer = pink::<f32>() * wind_vol;
     let id_wind = net.push(Box::new(wind_layer));
 
     let birds = lfo(move |t| {
-        let chirp1 = (sin_hz(0.3, t) * 0.5 + 0.5).powf(8.0);
-        let chirp2 = (sin_hz(0.17, t + 1.5) * 0.5 + 0.5).powf(10.0);
+        let chirp1 = (sin_hz(0.3, t) * 0.5 + 0.5_f64).powf(8.0);
+        let chirp2 = (sin_hz(0.17, t + 1.5) * 0.5 + 0.5_f64).powf(10.0);
         bird_f64 * (chirp1 + chirp2)
     }) * (white() >> bandpass_hz(3000.0, 8.0));
     let id_birds = net.push(Box::new(birds));
@@ -88,7 +89,7 @@ fn build_ocean(wave_size: f32) -> Box<dyn AudioUnit> {
     let waves = lfo(move |t| {
         let wave = (sin_hz(1.0 / wave_period, t) * 0.5 + 0.5) * wave_depth + (1.0 - wave_depth);
         wave * 0.6
-    }) * brown();
+    }) * brown::<f32>();
     let id1 = net.push(Box::new(waves));
 
     let foam = white() >> highpole_hz(4000.0) * 0.08_f32;
@@ -108,13 +109,13 @@ fn build_cave(drip_rate: f32, _resonance: f32) -> Box<dyn AudioUnit> {
     let mut net = Net::new(0, 1);
 
     let drips = lfo(move |t| {
-        let drip = (sin_hz(drip_freq, t) * 0.5 + 0.5).powf(20.0);
-        let drip2 = (sin_hz(drip_freq * 0.7, t + 0.8) * 0.5 + 0.5).powf(25.0);
+        let drip = (sin_hz(drip_freq, t) * 0.5 + 0.5_f64).powf(20.0);
+        let drip2 = (sin_hz(drip_freq * 0.7, t + 0.8) * 0.5 + 0.5_f64).powf(25.0);
         0.3 * (drip + drip2 * 0.6)
     }) * (white() >> bandpass_hz(2500.0, 12.0));
     let id_drips = net.push(Box::new(drips));
 
-    let bg = brown() * 0.02_f32;
+    let bg = brown::<f32>() * 0.02_f32;
     let id_bg = net.push(Box::new(bg));
 
     let sum = net.push(Box::new(pass() + pass()));
@@ -134,7 +135,7 @@ fn build_stream(flow_rate: f32) -> Box<dyn AudioUnit> {
     let layer1 = (white() >> lowpole_hz(cutoff)) * 0.4_f32;
     let id1 = net.push(Box::new(layer1));
 
-    let layer2 = (brown() >> lowpole_hz(600.0)) * 0.3_f32;
+    let layer2 = (brown::<f32>() >> lowpole_hz(600.0)) * 0.3_f32;
     let id2 = net.push(Box::new(layer2));
 
     let layer3 =
@@ -181,7 +182,7 @@ fn build_water(turbulence: f32) -> Box<dyn AudioUnit> {
     let water = lfo(move |t| 0.4 + 0.15 * sin_hz(0.25, t)) * (white() >> bandpass_hz(cutoff, q));
     let id_water = net.push(Box::new(water));
 
-    let undertone = (brown() >> lowpole_hz(400.0)) * 0.15_f32;
+    let undertone = (brown::<f32>() >> lowpole_hz(400.0)) * 0.15_f32;
     let id_under = net.push(Box::new(undertone));
 
     let sum = net.push(Box::new(pass() + pass()));
@@ -198,13 +199,13 @@ fn build_fire(intensity: f32, crackle: f32) -> Box<dyn AudioUnit> {
     let crackle_f64 = crackle as f64 * 0.4;
     let mut net = Net::new(0, 1);
 
-    let rumble = (brown() >> lowpole_hz(200.0)) * rumble_vol;
+    let rumble = (brown::<f32>() >> lowpole_hz(200.0)) * rumble_vol;
     let id_rumble = net.push(Box::new(rumble));
 
     let crackles = lfo(move |t| {
-        let burst1 = (sin_hz(1.3, t) * 0.5 + 0.5).powf(12.0);
-        let burst2 = (sin_hz(2.1, t + 0.3) * 0.5 + 0.5).powf(15.0);
-        let burst3 = (sin_hz(0.7, t + 1.1) * 0.5 + 0.5).powf(10.0);
+        let burst1 = (sin_hz(1.3, t) * 0.5 + 0.5_f64).powf(12.0);
+        let burst2 = (sin_hz(2.1, t + 0.3) * 0.5 + 0.5_f64).powf(15.0);
+        let burst3 = (sin_hz(0.7, t + 1.1) * 0.5 + 0.5_f64).powf(10.0);
         crackle_f64 * (burst1 + burst2 * 0.7 + burst3 * 0.5)
     }) * (white() >> bandpass_hz(3000.0, 5.0));
     let id_crackle = net.push(Box::new(crackles));
@@ -223,10 +224,10 @@ fn build_hum(frequency: f32, warmth: f32) -> Box<dyn AudioUnit> {
     let detune = 0.5 + warmth * 2.0;
     let mut net = Net::new(0, 1);
 
-    let h1 = sine_hz(f) * 0.4_f32;
-    let h2 = sine_hz(f * 2.0 + detune) * 0.2_f32;
-    let h3 = sine_hz(f * 3.0 - detune * 0.5) * 0.1_f32;
-    let h4 = sine_hz(f + detune * 0.3) * 0.15_f32;
+    let h1 = sine_hz::<f32>(f) * 0.4_f32;
+    let h2 = sine_hz::<f32>(f * 2.0 + detune) * 0.2_f32;
+    let h3 = sine_hz::<f32>(f * 3.0 - detune * 0.5) * 0.1_f32;
+    let h4 = sine_hz::<f32>(f + detune * 0.3) * 0.15_f32;
     let id1 = net.push(Box::new(h1));
     let id2 = net.push(Box::new(h2));
     let id3 = net.push(Box::new(h3));
@@ -251,7 +252,7 @@ fn build_hum(frequency: f32, warmth: f32) -> Box<dyn AudioUnit> {
 /// Wind emitter: directional wind with pitch control.
 fn build_emitter_wind(pitch: f32) -> Box<dyn AudioUnit> {
     let cutoff = pitch.max(100.0);
-    Box::new(lfo(move |t| 0.5 + 0.2 * sin_hz(0.18, t)) * (pink() >> lowpole_hz(cutoff)))
+    Box::new(lfo(move |t| 0.5 + 0.2 * sin_hz(0.18, t)) * (pink::<f32>() >> lowpole_hz(cutoff)))
 }
 
 /// Custom: direct waveform → filter → output.
@@ -263,12 +264,12 @@ fn build_custom(
     let mut net = Net::new(0, 1);
 
     let source: Box<dyn AudioUnit> = match waveform {
-        WaveformType::Sine => Box::new(sine_hz(filter_cutoff * 0.5)),
+        WaveformType::Sine => Box::new(sine_hz::<f32>(filter_cutoff * 0.5)),
         WaveformType::Saw => Box::new(saw_hz(filter_cutoff * 0.25)),
         WaveformType::Square => Box::new(square_hz(filter_cutoff * 0.25)),
         WaveformType::WhiteNoise => Box::new(white()),
-        WaveformType::PinkNoise => Box::new(pink()),
-        WaveformType::BrownNoise => Box::new(brown()),
+        WaveformType::PinkNoise => Box::new(pink::<f32>()),
+        WaveformType::BrownNoise => Box::new(brown::<f32>()),
     };
 
     let filter: Box<dyn AudioUnit> = match filter_type {

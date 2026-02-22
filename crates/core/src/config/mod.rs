@@ -1030,63 +1030,59 @@ impl Config {
 
         match provider {
             "gemini" => {
-                if let Some(ref mut oauth) = self.providers.gemini_oauth {
-                    if oauth.access_token != access_token
+                if let Some(ref mut oauth) = self.providers.gemini_oauth
+                    && (oauth.access_token != access_token
                         || oauth.refresh_token != refresh_token
-                        || oauth.expires_at != expires_at
-                    {
-                        oauth.access_token = access_token;
-                        if refresh_token.is_some() {
-                            oauth.refresh_token = refresh_token;
-                        }
-                        oauth.expires_at = expires_at;
-                        changed = true;
+                        || oauth.expires_at != expires_at)
+                {
+                    oauth.access_token = access_token;
+                    if refresh_token.is_some() {
+                        oauth.refresh_token = refresh_token;
                     }
+                    oauth.expires_at = expires_at;
+                    changed = true;
                 }
             }
             "anthropic" => {
-                if let Some(ref mut oauth) = self.providers.anthropic_oauth {
-                    if oauth.access_token != access_token
+                if let Some(ref mut oauth) = self.providers.anthropic_oauth
+                    && (oauth.access_token != access_token
                         || oauth.refresh_token != refresh_token
-                        || oauth.expires_at != expires_at
-                    {
-                        oauth.access_token = access_token;
-                        if refresh_token.is_some() {
-                            oauth.refresh_token = refresh_token;
-                        }
-                        oauth.expires_at = expires_at;
-                        changed = true;
+                        || oauth.expires_at != expires_at)
+                {
+                    oauth.access_token = access_token;
+                    if refresh_token.is_some() {
+                        oauth.refresh_token = refresh_token;
                     }
+                    oauth.expires_at = expires_at;
+                    changed = true;
                 }
             }
             "openai" => {
-                if let Some(ref mut oauth) = self.providers.openai_oauth {
-                    if oauth.access_token != access_token
+                if let Some(ref mut oauth) = self.providers.openai_oauth
+                    && (oauth.access_token != access_token
                         || oauth.refresh_token != refresh_token
-                        || oauth.expires_at != expires_at
-                    {
-                        oauth.access_token = access_token;
-                        if refresh_token.is_some() {
-                            oauth.refresh_token = refresh_token;
-                        }
-                        oauth.expires_at = expires_at;
-                        changed = true;
+                        || oauth.expires_at != expires_at)
+                {
+                    oauth.access_token = access_token;
+                    if refresh_token.is_some() {
+                        oauth.refresh_token = refresh_token;
                     }
+                    oauth.expires_at = expires_at;
+                    changed = true;
                 }
             }
             "github" => {
-                if let Some(ref mut oauth) = self.providers.github_copilot {
-                    if oauth.access_token != access_token
+                if let Some(ref mut oauth) = self.providers.github_copilot
+                    && (oauth.access_token != access_token
                         || oauth.refresh_token != refresh_token
-                        || oauth.expires_at != expires_at
-                    {
-                        oauth.access_token = access_token;
-                        if refresh_token.is_some() {
-                            oauth.refresh_token = refresh_token;
-                        }
-                        oauth.expires_at = expires_at;
-                        changed = true;
+                        || oauth.expires_at != expires_at)
+                {
+                    oauth.access_token = access_token;
+                    if refresh_token.is_some() {
+                        oauth.refresh_token = refresh_token;
                     }
+                    oauth.expires_at = expires_at;
+                    changed = true;
                 }
             }
             _ => {}
