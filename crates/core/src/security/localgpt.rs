@@ -146,10 +146,6 @@ pub use super::protected_files::{
 
 pub use super::suffix::{HARDCODED_SECURITY_SUFFIX, build_ending_security_block};
 
-// ── Bridge Isolation ───────────────────────────────────────────────
-
-pub use super::bridge::BridgeManager;
-
 // ── Constants ───────────────────────────────────────────────────────
 
 /// The filename for the user-editable security policy.

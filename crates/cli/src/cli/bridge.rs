@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use localgpt_core::security::BridgeManager;
+use localgpt_server::BridgeManager;
 
 #[derive(Args)]
 pub struct BridgeArgs {

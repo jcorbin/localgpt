@@ -4,7 +4,6 @@
 //! and public API documentation.
 
 mod audit;
-mod bridge;
 mod localgpt;
 mod policy;
 mod protected_files;

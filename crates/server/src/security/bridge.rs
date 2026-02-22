@@ -14,8 +14,8 @@ use tarpc::context;
 use tokio::sync::RwLock;
 use tracing::{error, info};
 
-use crate::paths::Paths;
-use crate::security::signing::read_device_key;
+use localgpt_core::paths::Paths;
+use localgpt_core::security::read_device_key;
 
 /// Manages bridge processes and their credentials.
 #[derive(Clone)]
