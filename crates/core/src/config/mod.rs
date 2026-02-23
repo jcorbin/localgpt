@@ -324,6 +324,12 @@ pub struct ProvidersConfig {
     pub claude_cli: Option<ClaudeCliConfig>,
 
     #[serde(default)]
+    pub gemini_cli: Option<GeminiCliConfig>,
+
+    #[serde(default)]
+    pub codex_cli: Option<CodexCliConfig>,
+
+    #[serde(default)]
     pub glm: Option<GlmConfig>,
 
     #[serde(default)]
@@ -400,6 +406,24 @@ pub struct ClaudeCliConfig {
     pub command: String,
 
     #[serde(default = "default_claude_cli_model")]
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeminiCliConfig {
+    #[serde(default = "default_gemini_cli_command")]
+    pub command: String,
+
+    #[serde(default = "default_gemini_cli_model")]
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexCliConfig {
+    #[serde(default = "default_codex_cli_command")]
+    pub command: String,
+
+    #[serde(default = "default_codex_cli_model")]
     pub model: String,
 }
 
@@ -643,6 +667,18 @@ fn default_claude_cli_command() -> String {
 }
 fn default_claude_cli_model() -> String {
     "opus".to_string()
+}
+fn default_gemini_cli_command() -> String {
+    "gemini".to_string()
+}
+fn default_gemini_cli_model() -> String {
+    "gemini-2.0-flash".to_string()
+}
+fn default_codex_cli_command() -> String {
+    "codex".to_string()
+}
+fn default_codex_cli_model() -> String {
+    "o4-mini".to_string()
 }
 fn default_glm_base_url() -> String {
     "https://api.z.ai/api/coding/paas/v4".to_string()

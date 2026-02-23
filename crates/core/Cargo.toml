@@ -8,11 +8,15 @@ description = "Core library for LocalGPT — agent, memory, config, security"
 readme = "README.md"
 
 [features]
-default = ["embeddings-local", "claude-cli", "sqlite-vec"]
+default = ["embeddings-local", "claude-cli", "gemini-cli", "codex-cli", "sqlite-vec"]
 # Local embeddings via fastembed (ONNX). Works on desktop and mobile.
 embeddings-local = ["fastembed"]
 # Claude CLI provider (requires subprocess execution — not available on mobile)
 claude-cli = []
+# Gemini CLI provider (requires subprocess execution — not available on mobile)
+gemini-cli = []
+# Codex CLI provider (requires subprocess execution — not available on mobile)
+codex-cli = []
 # GGUF embedding model support via llama.cpp (requires C++ compiler)
 embeddings-gguf = ["llama-cpp-2"]
 # OpenAI API embeddings (no native deps, requires API key)

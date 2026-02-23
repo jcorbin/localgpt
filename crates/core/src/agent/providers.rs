@@ -236,6 +236,7 @@ fn resolve_model_alias(model: &str) -> String {
         "gpt-mini" => "openai/gpt-4o-mini".to_string(),
         "glm" => "glm/glm-4.7".to_string(),
         "grok" => "xai/grok-3-mini".to_string(),
+        "codex" => "codex-cli/o4-mini".to_string(),
         _ => model.to_string(),
     }
 }
@@ -406,6 +407,38 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
             )
         }
 
+        #[cfg(feature = "gemini-cli")]
+        "gemini-cli" => {
+            let cli_config = config.providers.gemini_cli.as_ref();
+            let command = cli_config.map(|c| c.command.as_str()).unwrap_or("gemini");
+            Ok(Box::new(GeminiCliProvider::new(
+                command, &model_id, workspace,
+            )?))
+        }
+        #[cfg(not(feature = "gemini-cli"))]
+        "gemini-cli" => {
+            anyhow::bail!(
+                "Gemini CLI provider is not available in this build.\n\
+                 The 'gemini-cli' feature is required for subprocess-based providers."
+            )
+        }
+
+        #[cfg(feature = "codex-cli")]
+        "codex-cli" => {
+            let cli_config = config.providers.codex_cli.as_ref();
+            let command = cli_config.map(|c| c.command.as_str()).unwrap_or("codex");
+            Ok(Box::new(CodexCliProvider::new(
+                command, &model_id, workspace,
+            )?))
+        }
+        #[cfg(not(feature = "codex-cli"))]
+        "codex-cli" => {
+            anyhow::bail!(
+                "Codex CLI provider is not available in this build.\n\
+                 The 'codex-cli' feature is required for subprocess-based providers."
+            )
+        }
+
         "ollama" => {
             let ollama_config = config.providers.ollama.as_ref().ok_or_else(|| {
                 anyhow::anyhow!(
@@ -505,6 +538,7 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
                 - xai/grok-3-mini\n  \
                 - glm/glm-4.7\n  \
                 - claude-cli/opus, claude-cli/sonnet\n  \
+                - gemini-cli/gemini-2.0-flash\n  \
                 - ollama/llama3, ollama/mistral\n\n\
                 Or use aliases: opus, sonnet, haiku, gpt, gpt-mini, grok, glm",
                 provider,
@@ -2401,6 +2435,516 @@ impl LLMProvider for ClaudeCliProvider {
             if let Some(ref new_sid) = session_id_captured {
                 info!("Claude CLI streaming session: {}", new_sid);
             }
+        };
+
+        Ok(Box::pin(stream))
+    }
+}
+
+#[cfg(feature = "gemini-cli")]
+/// Gemini CLI Provider - invokes the `gemini` CLI command
+/// No tool support (text in → text out only)
+/// Streaming is emulated via non-streaming call for now
+pub struct GeminiCliProvider {
+    command: String,
+    model: String,
+    /// Working directory for CLI execution
+    workspace: std::path::PathBuf,
+    /// Session key for the session store (e.g., "main")
+    session_key: String,
+    /// LocalGPT session ID (for session store tracking)
+    localgpt_session_id: String,
+    /// CLI session ID for multi-turn conversations (interior mutability for &self methods)
+    cli_session_id: StdMutex<Option<String>>,
+}
+
+#[cfg(feature = "gemini-cli")]
+/// Provider name for CLI session storage
+const GEMINI_CLI_PROVIDER: &str = "gemini-cli";
+
+#[cfg(feature = "gemini-cli")]
+impl GeminiCliProvider {
+    pub fn new(command: &str, model: &str, workspace: std::path::PathBuf) -> Result<Self> {
+        // Load existing CLI session from session store
+        let session_key = "main".to_string();
+        let existing_session = load_cli_session_from_store(&session_key, GEMINI_CLI_PROVIDER);
+
+        if let Some(ref sid) = existing_session {
+            debug!("Loaded existing Gemini CLI session: {}", sid);
+        }
+
+        Ok(Self {
+            command: command.to_string(),
+            model: model.to_string(),
+            workspace,
+            session_key,
+            localgpt_session_id: uuid::Uuid::new_v4().to_string(),
+            cli_session_id: StdMutex::new(existing_session),
+        })
+    }
+
+    /// Execute Gemini CLI command
+    async fn execute_cli_command(
+        &self,
+        prompt: &str,
+        system_prompt: Option<&str>,
+        existing_session: Option<&str>,
+    ) -> Result<(std::process::Output, bool)> {
+        use std::process::Command;
+
+        // First attempt: try with existing session if available
+        if let Some(cli_sid) = existing_session {
+            let args = self.build_cli_args(prompt, system_prompt, Some(cli_sid), false);
+
+            debug!(
+                "Gemini CLI (resume): {} {:?} (cwd: {:?})",
+                self.command, args, self.workspace
+            );
+
+            let output = tokio::task::spawn_blocking({
+                let command = self.command.clone();
+                let args = args.clone();
+                let workspace = self.workspace.clone();
+                move || {
+                    Command::new(&command)
+                        .args(&args)
+                        .current_dir(&workspace)
+                        .output()
+                }
+            })
+            .await??;
+
+            if output.status.success() {
+                return Ok((output, false));
+            }
+
+            // Check if the error is related to session not found
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.to_lowercase().contains("session")
+                && (stderr.to_lowercase().contains("found")
+                    || stderr.to_lowercase().contains("exist"))
+            {
+                info!(
+                    "Gemini CLI session {} not found, creating new session",
+                    cli_sid
+                );
+                // Clear the invalid session from our state
+                if let Ok(mut cli_session) = self.cli_session_id.lock() {
+                    *cli_session = None;
+                }
+            } else {
+                // Some other error - propagate it
+                anyhow::bail!("Gemini CLI failed: {}", stderr);
+            }
+        }
+
+        // Create new session
+        let args = self.build_cli_args(prompt, system_prompt, None, true);
+
+        debug!(
+            "Gemini CLI (new): {} {:?} (cwd: {:?})",
+            self.command, args, self.workspace
+        );
+
+        let output = tokio::task::spawn_blocking({
+            let command = self.command.clone();
+            let args = args.clone();
+            let workspace = self.workspace.clone();
+            move || {
+                Command::new(&command)
+                    .args(&args)
+                    .current_dir(&workspace)
+                    .output()
+            }
+        })
+        .await??;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Gemini CLI failed: {}", stderr);
+        }
+
+        Ok((output, true))
+    }
+
+    /// Build CLI arguments for a command
+    fn build_cli_args(
+        &self,
+        prompt: &str,
+        system_prompt: Option<&str>,
+        resume_session: Option<&str>,
+        is_new_session: bool,
+    ) -> Vec<String> {
+        let mut args = vec![
+            "-p".to_string(),
+            // Prepend system prompt to user prompt if new session (Gemini CLI lacks --system-prompt)
+            if is_new_session && let Some(sys) = system_prompt {
+                format!("System Instruction: {}\n\nUser Request: {}", sys, prompt)
+            } else {
+                prompt.to_string()
+            },
+            "--output-format".to_string(),
+            "json".to_string(),   // Always use json for now
+            "--yolo".to_string(), // Auto-accept actions (skip permissions)
+        ];
+
+        // Model (only needed on new sessions, but good to be explicit)
+        if is_new_session {
+            args.push("--model".to_string());
+            args.push(self.model.clone());
+        }
+
+        // CLI session handling
+        if let Some(cli_sid) = resume_session {
+            args.push("--resume".to_string());
+            args.push(cli_sid.to_string());
+        }
+
+        args
+    }
+}
+
+#[cfg(feature = "gemini-cli")]
+/// Parse Gemini CLI JSON output, returning (response_text, session_id)
+fn parse_gemini_cli_output(stdout: &str) -> Result<(String, Option<String>)> {
+    // Gemini CLI outputs JSON: { "session_id": "...", "response": "..." }
+    if let Ok(json) = serde_json::from_str::<Value>(stdout) {
+        let text = json
+            .get("response")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| stdout.trim().to_string());
+
+        let session_id = json
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        return Ok((text, session_id));
+    }
+
+    // Fallback
+    Ok((stdout.trim().to_string(), None))
+}
+
+#[cfg(feature = "gemini-cli")]
+#[async_trait]
+impl LLMProvider for GeminiCliProvider {
+    fn name(&self) -> String {
+        "gemini-cli".to_string()
+    }
+
+    fn reset_session(&self) {
+        if let Ok(mut cli_session) = self.cli_session_id.lock() {
+            *cli_session = None;
+        }
+        // Clear from session store on disk
+        if let Ok(mut store) = super::session_store::SessionStore::load() {
+            let _ = store.update(&self.session_key, &self.localgpt_session_id, |entry| {
+                entry.clear_cli_session_ids();
+            });
+        }
+        info!("Gemini CLI session reset");
+    }
+
+    async fn chat(
+        &self,
+        messages: &[Message],
+        _tools: Option<&[ToolSchema]>,
+    ) -> Result<LLMResponse> {
+        let prompt = build_prompt_from_messages(messages);
+        let system_prompt = extract_system_prompt(messages);
+
+        let current_cli_session = self
+            .cli_session_id
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Session lock poisoned: {}", e))?
+            .clone();
+
+        let (output, used_new_session) = self
+            .execute_cli_command(
+                &prompt,
+                system_prompt.as_deref(),
+                current_cli_session.as_deref(),
+            )
+            .await?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let (response, new_session_id) = parse_gemini_cli_output(&stdout)?;
+
+        if let Some(ref new_cli_sid) = new_session_id {
+            let mut cli_session = self
+                .cli_session_id
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Session lock poisoned: {}", e))?;
+            *cli_session = Some(new_cli_sid.clone());
+
+            if let Err(e) = save_cli_session_to_store(
+                &self.session_key,
+                &self.localgpt_session_id,
+                GEMINI_CLI_PROVIDER,
+                new_cli_sid,
+            ) {
+                debug!("Failed to persist CLI session: {}", e);
+            }
+
+            if used_new_session {
+                info!("Created new Gemini CLI session: {}", new_cli_sid);
+            }
+        }
+
+        Ok(LLMResponse::text(response))
+    }
+
+    async fn summarize(&self, text: &str) -> Result<String> {
+        let messages = vec![Message {
+            role: Role::User,
+            content: format!("Summarize concisely:\n\n{}", text),
+            tool_calls: None,
+            tool_call_id: None,
+            images: Vec::new(),
+        }];
+        match self.chat(&messages, None).await?.content {
+            LLMResponseContent::Text(summary) => Ok(summary),
+            _ => anyhow::bail!("Unexpected response"),
+        }
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: &[Message],
+        tools: Option<&[ToolSchema]>,
+    ) -> Result<StreamResult> {
+        // Emulate streaming by calling chat() and yielding one chunk
+        let response = self.chat(messages, tools).await?;
+
+        let text = match response.content {
+            LLMResponseContent::Text(t) => t,
+            _ => return Err(anyhow::anyhow!("Unexpected non-text response")),
+        };
+
+        let stream = async_stream::stream! {
+            yield Ok(StreamChunk {
+                delta: text,
+                done: true,
+                tool_calls: None,
+            });
+        };
+
+        Ok(Box::pin(stream))
+    }
+}
+
+#[cfg(feature = "codex-cli")]
+/// Parse Codex CLI JSON output, returning (response_text, session_id)
+fn parse_codex_cli_output(stdout: &str) -> Result<(String, Option<String>)> {
+    if let Ok(json) = serde_json::from_str::<Value>(stdout) {
+        let text = json
+            .get("response")
+            .and_then(|v| v.as_str())
+            .or_else(|| json.get("text").and_then(|v| v.as_str()))
+            .or_else(|| json.get("content").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| stdout.trim().to_string());
+
+        let session_id = json
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        return Ok((text, session_id));
+    }
+
+    Ok((stdout.trim().to_string(), None))
+}
+
+#[cfg(feature = "codex-cli")]
+pub struct CodexCliProvider {
+    command: String,
+    model: String,
+    workspace: std::path::PathBuf,
+    session_key: String,
+    localgpt_session_id: String,
+    cli_session_id: StdMutex<Option<String>>,
+}
+
+#[cfg(feature = "codex-cli")]
+const CODEX_CLI_PROVIDER: &str = "codex-cli";
+
+#[cfg(feature = "codex-cli")]
+impl CodexCliProvider {
+    pub fn new(command: &str, model: &str, workspace: std::path::PathBuf) -> Result<Self> {
+        let session_key = "main".to_string();
+        let existing_session = load_cli_session_from_store(&session_key, CODEX_CLI_PROVIDER);
+
+        if let Some(ref sid) = existing_session {
+            debug!("Loaded existing Codex CLI session: {}", sid);
+        }
+
+        Ok(Self {
+            command: command.to_string(),
+            model: model.to_string(),
+            workspace,
+            session_key,
+            localgpt_session_id: uuid::Uuid::new_v4().to_string(),
+            cli_session_id: StdMutex::new(existing_session),
+        })
+    }
+
+    async fn execute_cli_command(
+        &self,
+        prompt: &str,
+        system_prompt: Option<&str>,
+        existing_session: Option<&str>,
+    ) -> Result<(std::process::Output, bool)> {
+        use std::process::Command;
+
+        let mut args = vec!["-q".to_string(), "--json".to_string()];
+
+        if !self.model.is_empty() {
+            args.push("--model".to_string());
+            args.push(self.model.clone());
+        }
+
+        if let Some(sys) = system_prompt {
+            args.push("--system-prompt".to_string());
+            args.push(sys.to_string());
+        }
+
+        if let Some(sid) = existing_session {
+            args.push("--session".to_string());
+            args.push(sid.to_string());
+        }
+
+        args.push(prompt.to_string());
+
+        debug!(
+            "Codex CLI: {} {:?} (cwd: {:?})",
+            self.command, args, self.workspace
+        );
+
+        let output = tokio::task::spawn_blocking({
+            let command = self.command.clone();
+            let args = args.clone();
+            let workspace = self.workspace.clone();
+            move || {
+                Command::new(&command)
+                    .args(&args)
+                    .current_dir(&workspace)
+                    .output()
+            }
+        })
+        .await??;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Codex CLI failed: {}", stderr);
+        }
+
+        Ok((output, existing_session.is_none()))
+    }
+}
+
+#[cfg(feature = "codex-cli")]
+#[async_trait]
+impl LLMProvider for CodexCliProvider {
+    fn name(&self) -> String {
+        "codex-cli".to_string()
+    }
+
+    fn reset_session(&self) {
+        if let Ok(mut cli_session) = self.cli_session_id.lock() {
+            *cli_session = None;
+        }
+        if let Ok(mut store) = super::session_store::SessionStore::load() {
+            let _ = store.update(&self.session_key, &self.localgpt_session_id, |entry| {
+                entry.clear_cli_session_ids();
+            });
+        }
+        info!("Codex CLI session reset");
+    }
+
+    async fn chat(
+        &self,
+        messages: &[Message],
+        _tools: Option<&[ToolSchema]>,
+    ) -> Result<LLMResponse> {
+        let prompt = build_prompt_from_messages(messages);
+        let system_prompt = extract_system_prompt(messages);
+
+        let current_cli_session = self
+            .cli_session_id
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Session lock poisoned: {}", e))?
+            .clone();
+
+        let (output, used_new_session) = self
+            .execute_cli_command(
+                &prompt,
+                system_prompt.as_deref(),
+                current_cli_session.as_deref(),
+            )
+            .await?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let (response, new_session_id) = parse_codex_cli_output(&stdout)?;
+
+        if let Some(ref new_cli_sid) = new_session_id {
+            let mut cli_session = self
+                .cli_session_id
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Session lock poisoned: {}", e))?;
+            *cli_session = Some(new_cli_sid.clone());
+
+            if let Err(e) = save_cli_session_to_store(
+                &self.session_key,
+                &self.localgpt_session_id,
+                CODEX_CLI_PROVIDER,
+                new_cli_sid,
+            ) {
+                debug!("Failed to persist CLI session: {}", e);
+            }
+
+            if used_new_session {
+                info!("Created new Codex CLI session: {}", new_cli_sid);
+            }
+        }
+
+        Ok(LLMResponse::text(response))
+    }
+
+    async fn summarize(&self, text: &str) -> Result<String> {
+        let messages = vec![Message {
+            role: Role::User,
+            content: format!("Summarize concisely:\n\n{}", text),
+            tool_calls: None,
+            tool_call_id: None,
+            images: Vec::new(),
+        }];
+        match self.chat(&messages, None).await?.content {
+            LLMResponseContent::Text(summary) => Ok(summary),
+            _ => anyhow::bail!("Unexpected response"),
+        }
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: &[Message],
+        tools: Option<&[ToolSchema]>,
+    ) -> Result<StreamResult> {
+        let response = self.chat(messages, tools).await?;
+
+        let text = match response.content {
+            LLMResponseContent::Text(t) => t,
+            _ => return Err(anyhow::anyhow!("Unexpected non-text response")),
+        };
+
+        let stream = async_stream::stream! {
+            yield Ok(StreamChunk {
+                delta: text,
+                done: true,
+                tool_calls: None,
+            });
         };
 
         Ok(Box::pin(stream))
