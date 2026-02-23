@@ -1,5 +1,5 @@
 
-# <img src="https://localgpt.app/logo/localgpt-icon-app.png" width="50" height="50" alt="LocalGPT" /> LocalGPT
+# <img src="https://localgpt.app/logo/localgpt-icon-app.svg" width="50" height="50" alt="LocalGPT" /> LocalGPT
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/localgpt-app/localgpt#license)
 [![Crates.io](https://img.shields.io/crates/v/localgpt.svg)](https://crates.io/crates/localgpt)
@@ -304,7 +304,7 @@ When the daemon is running:
 | `GET /api/saved-sessions/{session_id}` | Get persisted session |
 | `GET /api/logs/daemon` | Tail daemon logs |
 
-## <img src="https://localgpt.app/logo/localgpt-icon.png" width="100" height="100" alt="LocalGPT" /> Gen Mode (World Generation)
+## <img src="https://localgpt.app/logo/localgpt-icon.svg" width="100" height="100" alt="LocalGPT" /> Gen Mode (World Generation)
 
 `Gen` is a separate binary (`localgpt-gen`) in the workspace — not a `localgpt gen` subcommand.
 
