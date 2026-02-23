@@ -352,19 +352,29 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
+// Initial value and increment amount for handles. 
+// These ensure that SWIFT handles always have the lowest bit set
+fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
+fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
+
 fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
     // All mutation happens with this lock held, which is why we implement @unchecked Sendable.
     private let lock = NSLock()
     private var map: [UInt64: T] = [:]
-    private var currentHandle: UInt64 = 1
+    private var currentHandle: UInt64 = UNIFFI_HANDLEMAP_INITIAL
 
     func insert(obj: T) -> UInt64 {
         lock.withLock {
-            let handle = currentHandle
-            currentHandle += 1
-            map[handle] = obj
-            return handle
+            return doInsert(obj)
         }
+    }
+
+    // Low-level insert function, this assumes `lock` is held.
+    private func doInsert(_ obj: T) -> UInt64 {
+        let handle = currentHandle
+        currentHandle += UNIFFI_HANDLEMAP_DELTA
+        map[handle] = obj
+        return handle
     }
 
      func get(handle: UInt64) throws -> T {
@@ -373,6 +383,15 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
                 throw UniffiInternalError.unexpectedStaleHandle
             }
             return obj
+        }
+    }
+
+     func clone(handle: UInt64) throws -> UInt64 {
+        try lock.withLock {
+            guard let obj = map[handle] else {
+                throw UniffiInternalError.unexpectedStaleHandle
+            }
+            return doInsert(obj)
         }
     }
 
@@ -617,13 +636,13 @@ public protocol LocalGptClientProtocol: AnyObject, Sendable {
  * any thread.
  */
 open class LocalGptClient: LocalGptClientProtocol, @unchecked Sendable {
-    fileprivate let pointer: UnsafeMutableRawPointer!
+    fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public struct NoPointer {
+    public struct NoHandle {
         public init() {}
     }
 
@@ -633,27 +652,27 @@ open class LocalGptClient: LocalGptClientProtocol, @unchecked Sendable {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
-        self.pointer = pointer
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
     }
 
     // This constructor can be used to instantiate a fake object.
-    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
     //
     // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public init(noPointer: NoPointer) {
-        self.pointer = nil
+    public init(noHandle: NoHandle) {
+        self.handle = 0
     }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_localgpt_mobile_fn_clone_localgptclient(self.pointer, $0) }
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_localgpt_mobile_fn_clone_localgptclient(self.handle, $0) }
     }
     /**
      * Create a new client rooted at the given directory.
@@ -662,21 +681,22 @@ open class LocalGptClient: LocalGptClientProtocol, @unchecked Sendable {
      * (e.g. `NSDocumentDirectory` on iOS, `Context.filesDir` on Android).
      */
 public convenience init(dataDir: String)throws  {
-    let pointer =
+    let handle =
         try rustCallWithError(FfiConverterTypeMobileError_lift) {
     uniffi_localgpt_mobile_fn_constructor_localgptclient_new(
         FfiConverterString.lower(dataDir),$0
     )
 }
-    self.init(unsafeFromRawPointer: pointer)
+    self.init(unsafeFromHandle: handle)
 }
 
     deinit {
-        guard let pointer = pointer else {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
             return
         }
 
-        try! rustCall { uniffi_localgpt_mobile_fn_free_localgptclient(pointer, $0) }
+        try! rustCall { uniffi_localgpt_mobile_fn_free_localgptclient(handle, $0) }
     }
 
     
@@ -687,7 +707,8 @@ public convenience init(dataDir: String)throws  {
      */
 open func chat(message: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_chat(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_chat(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(message),$0
     )
 })
@@ -697,7 +718,8 @@ open func chat(message: String)throws  -> String  {
      * Clear session history.
      */
 open func clearSession()  {try! rustCall() {
-    uniffi_localgpt_mobile_fn_method_localgptclient_clear_session(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_clear_session(
+            self.uniffiCloneHandle(),$0
     )
 }
 }
@@ -706,7 +728,8 @@ open func clearSession()  {try! rustCall() {
      * Compact the current session to free context space.
      */
 open func compactSession()throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_compact_session(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_compact_session(
+            self.uniffiCloneHandle(),$0
     )
 }
 }
@@ -715,7 +738,8 @@ open func compactSession()throws   {try rustCallWithError(FfiConverterTypeMobile
      * Configure an API key for a provider.
      */
 open func configureProvider(provider: String, apiKey: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_configure_provider(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_configure_provider(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(provider),
         FfiConverterString.lower(apiKey),$0
     )
@@ -727,7 +751,8 @@ open func configureProvider(provider: String, apiKey: String)throws   {try rustC
      */
 open func getHeartbeat()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_get_heartbeat(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_heartbeat(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -737,7 +762,8 @@ open func getHeartbeat()throws  -> String  {
      */
 open func getMemory()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_get_memory(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_memory(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -747,7 +773,8 @@ open func getMemory()throws  -> String  {
      */
 open func getModel() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_localgpt_mobile_fn_method_localgptclient_get_model(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -757,7 +784,8 @@ open func getModel() -> String  {
      */
 open func getSoul()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_get_soul(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_soul(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -768,7 +796,8 @@ open func getSoul()throws  -> String  {
      */
 open func isBrandNew() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_localgpt_mobile_fn_method_localgptclient_is_brand_new(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_is_brand_new(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -778,7 +807,8 @@ open func isBrandNew() -> Bool  {
      */
 open func listProviders() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
-    uniffi_localgpt_mobile_fn_method_localgptclient_list_providers(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_list_providers(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -788,7 +818,8 @@ open func listProviders() -> [String]  {
      */
 open func memoryGet(filename: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_memory_get(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_memory_get(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(filename),$0
     )
 })
@@ -799,7 +830,8 @@ open func memoryGet(filename: String)throws  -> String  {
      */
 open func memorySearch(query: String, maxResults: UInt32)throws  -> [SearchResult]  {
     return try  FfiConverterSequenceTypeSearchResult.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_memory_search(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_memory_search(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(query),
         FfiConverterUInt32.lower(maxResults),$0
     )
@@ -810,7 +842,8 @@ open func memorySearch(query: String, maxResults: UInt32)throws  -> [SearchResul
      * Start a fresh session.
      */
 open func newSession()throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_new_session(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_new_session(
+            self.uniffiCloneHandle(),$0
     )
 }
 }
@@ -820,7 +853,8 @@ open func newSession()throws   {try rustCallWithError(FfiConverterTypeMobileErro
      */
 open func sessionStatus() -> SessionStatus  {
     return try!  FfiConverterTypeSessionStatus_lift(try! rustCall() {
-    uniffi_localgpt_mobile_fn_method_localgptclient_session_status(self.uniffiClonePointer(),$0
+    uniffi_localgpt_mobile_fn_method_localgptclient_session_status(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -829,7 +863,8 @@ open func sessionStatus() -> SessionStatus  {
      * Write new HEARTBEAT.md content.
      */
 open func setHeartbeat(content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_set_heartbeat(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_heartbeat(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(content),$0
     )
 }
@@ -839,7 +874,8 @@ open func setHeartbeat(content: String)throws   {try rustCallWithError(FfiConver
      * Switch to a different model.
      */
 open func setModel(model: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_set_model(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_model(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(model),$0
     )
 }
@@ -849,13 +885,15 @@ open func setModel(model: String)throws   {try rustCallWithError(FfiConverterTyp
      * Write new SOUL.md content.
      */
 open func setSoul(content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
-    uniffi_localgpt_mobile_fn_method_localgptclient_set_soul(self.uniffiClonePointer(),
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_soul(
+            self.uniffiCloneHandle(),
         FfiConverterString.lower(content),$0
     )
 }
 }
     
 
+    
 }
 
 
@@ -863,33 +901,24 @@ open func setSoul(content: String)throws   {try rustCallWithError(FfiConverterTy
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeLocalGPTClient: FfiConverter {
-
-    typealias FfiType = UnsafeMutableRawPointer
+    typealias FfiType = UInt64
     typealias SwiftType = LocalGptClient
 
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> LocalGptClient {
-        return LocalGptClient(unsafeFromRawPointer: pointer)
+    public static func lift(_ handle: UInt64) throws -> LocalGptClient {
+        return LocalGptClient(unsafeFromHandle: handle)
     }
 
-    public static func lower(_ value: LocalGptClient) -> UnsafeMutableRawPointer {
-        return value.uniffiClonePointer()
+    public static func lower(_ value: LocalGptClient) -> UInt64 {
+        return value.uniffiCloneHandle()
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalGptClient {
-        let v: UInt64 = try readInt(&buf)
-        // The Rust code won't compile if a pointer won't fit in a UInt64.
-        // We have to go via `UInt` because that's the thing that's the size of a pointer.
-        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
-        if (ptr == nil) {
-            throw UniffiInternalError.unexpectedNullPointer
-        }
-        return try lift(ptr!)
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
     }
 
     public static func write(_ value: LocalGptClient, into buf: inout [UInt8]) {
-        // This fiddling is because `Int` is the thing that's the same size as a pointer.
-        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
-        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+        writeInt(&buf, lower(value))
     }
 }
 
@@ -897,14 +926,14 @@ public struct FfiConverterTypeLocalGPTClient: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeLocalGPTClient_lift(_ pointer: UnsafeMutableRawPointer) throws -> LocalGptClient {
-    return try FfiConverterTypeLocalGPTClient.lift(pointer)
+public func FfiConverterTypeLocalGPTClient_lift(_ handle: UInt64) throws -> LocalGptClient {
+    return try FfiConverterTypeLocalGPTClient.lift(handle)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeLocalGPTClient_lower(_ value: LocalGptClient) -> UnsafeMutableRawPointer {
+public func FfiConverterTypeLocalGPTClient_lower(_ value: LocalGptClient) -> UInt64 {
     return FfiConverterTypeLocalGPTClient.lower(value)
 }
 
@@ -914,7 +943,7 @@ public func FfiConverterTypeLocalGPTClient_lower(_ value: LocalGptClient) -> Uns
 /**
  * A search result returned from memory search.
  */
-public struct SearchResult {
+public struct SearchResult: Equatable, Hashable {
     public var file: String
     public var content: String
     public var score: Double
@@ -926,35 +955,15 @@ public struct SearchResult {
         self.content = content
         self.score = score
     }
+
+    
+
+    
 }
 
 #if compiler(>=6)
 extension SearchResult: Sendable {}
 #endif
-
-
-extension SearchResult: Equatable, Hashable {
-    public static func ==(lhs: SearchResult, rhs: SearchResult) -> Bool {
-        if lhs.file != rhs.file {
-            return false
-        }
-        if lhs.content != rhs.content {
-            return false
-        }
-        if lhs.score != rhs.score {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(file)
-        hasher.combine(content)
-        hasher.combine(score)
-    }
-}
-
-
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -995,7 +1004,7 @@ public func FfiConverterTypeSearchResult_lower(_ value: SearchResult) -> RustBuf
 /**
  * Session status information.
  */
-public struct SessionStatus {
+public struct SessionStatus: Equatable, Hashable {
     public var model: String
     public var tokensUsed: UInt64
     public var tokensAvailable: UInt64
@@ -1007,35 +1016,15 @@ public struct SessionStatus {
         self.tokensUsed = tokensUsed
         self.tokensAvailable = tokensAvailable
     }
+
+    
+
+    
 }
 
 #if compiler(>=6)
 extension SessionStatus: Sendable {}
 #endif
-
-
-extension SessionStatus: Equatable, Hashable {
-    public static func ==(lhs: SessionStatus, rhs: SessionStatus) -> Bool {
-        if lhs.model != rhs.model {
-            return false
-        }
-        if lhs.tokensUsed != rhs.tokensUsed {
-            return false
-        }
-        if lhs.tokensAvailable != rhs.tokensAvailable {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(model)
-        hasher.combine(tokensUsed)
-        hasher.combine(tokensAvailable)
-    }
-}
-
-
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1073,7 +1062,7 @@ public func FfiConverterTypeSessionStatus_lower(_ value: SessionStatus) -> RustB
 }
 
 
-public enum MobileError: Swift.Error {
+public enum MobileError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
     
@@ -1085,8 +1074,21 @@ public enum MobileError: Swift.Error {
     )
     case Config(String
     )
+
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
 }
 
+#if compiler(>=6)
+extension MobileError: Sendable {}
+#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1163,21 +1165,6 @@ public func FfiConverterTypeMobileError_lower(_ value: MobileError) -> RustBuffe
     return FfiConverterTypeMobileError.lower(value)
 }
 
-
-extension MobileError: Equatable, Hashable {}
-
-
-
-
-extension MobileError: Foundation.LocalizedError {
-    public var errorDescription: String? {
-        String(reflecting: self)
-    }
-}
-
-
-
-
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -1247,7 +1234,7 @@ private enum InitializationResult {
 // the code inside is only computed once.
 private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
-    let bindings_contract_version = 29
+    let bindings_contract_version = 30
     // Get the scaffolding contract version by calling the into the dylib
     let scaffolding_contract_version = ffi_localgpt_mobile_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {

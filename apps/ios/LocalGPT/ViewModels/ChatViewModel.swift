@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import LocalGPTWrapper
 
 @MainActor
@@ -8,7 +9,7 @@ class ChatViewModel: ObservableObject {
     @Published var showError = false
     @Published var lastError: String?
 
-    private var client: LocalGPTClient?
+    private var client: LocalGptClient?
 
     init() {
         setupClient()
@@ -21,7 +22,7 @@ class ChatViewModel: ObservableObject {
             let dataDir = docs.appendingPathComponent("LocalGPT", isDirectory: true).path
 
             // Initialize the Rust client
-            self.client = try LocalGPTClient(dataDir: dataDir)
+            self.client = try LocalGptClient(dataDir: dataDir)
 
             // Add a welcome message if it's a new workspace
             if client?.isBrandNew() ?? false {
@@ -38,10 +39,12 @@ class ChatViewModel: ObservableObject {
 
         isThinking = true
 
-        // Run chat in background thread to avoid blocking UI
-        Task.detached(priority: .userInitiated) {
+        // Capture client on the main actor to avoid crossing actor boundaries
+        let capturedClient = self.client
+
+        Task(priority: .userInitiated) {
             do {
-                guard let client = await self.getClient() else { return }
+                guard let client = capturedClient else { return }
 
                 // Call Rust core
                 let response = try client.chat(message: text)
@@ -71,7 +74,7 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func getClient() -> LocalGPTClient? {
+    private func getClient() -> LocalGptClient? {
         return client
     }
 
@@ -80,3 +83,4 @@ class ChatViewModel: ObservableObject {
         self.showError = true
     }
 }
+

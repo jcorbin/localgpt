@@ -50,9 +50,9 @@ typedef void (*UniffiRustFutureContinuationCallback)(uint64_t, int8_t
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_FREE
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_FREE
-typedef void (*UniffiForeignFutureFree)(uint64_t
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK
+typedef void (*UniffiForeignFutureDroppedCallback)(uint64_t
     );
 
 #endif
@@ -62,293 +62,285 @@ typedef void (*UniffiCallbackInterfaceFree)(uint64_t
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE
-typedef struct UniffiForeignFuture {
-    uint64_t handle;
-    UniffiForeignFutureFree _Nonnull free;
-} UniffiForeignFuture;
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CLONE
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CLONE
+typedef uint64_t (*UniffiCallbackInterfaceClone)(uint64_t
+    );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U8
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U8
-typedef struct UniffiForeignFutureStructU8 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK_STRUCT
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK_STRUCT
+typedef struct UniffiForeignFutureDroppedCallbackStruct {
+    uint64_t handle;
+    UniffiForeignFutureDroppedCallback _Nonnull free;
+} UniffiForeignFutureDroppedCallbackStruct;
+
+#endif
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U8
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U8
+typedef struct UniffiForeignFutureResultU8 {
     uint8_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU8;
+} UniffiForeignFutureResultU8;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U8
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U8
-typedef void (*UniffiForeignFutureCompleteU8)(uint64_t, UniffiForeignFutureStructU8
+typedef void (*UniffiForeignFutureCompleteU8)(uint64_t, UniffiForeignFutureResultU8
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I8
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I8
-typedef struct UniffiForeignFutureStructI8 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I8
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I8
+typedef struct UniffiForeignFutureResultI8 {
     int8_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI8;
+} UniffiForeignFutureResultI8;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I8
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I8
-typedef void (*UniffiForeignFutureCompleteI8)(uint64_t, UniffiForeignFutureStructI8
+typedef void (*UniffiForeignFutureCompleteI8)(uint64_t, UniffiForeignFutureResultI8
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U16
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U16
-typedef struct UniffiForeignFutureStructU16 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U16
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U16
+typedef struct UniffiForeignFutureResultU16 {
     uint16_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU16;
+} UniffiForeignFutureResultU16;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U16
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U16
-typedef void (*UniffiForeignFutureCompleteU16)(uint64_t, UniffiForeignFutureStructU16
+typedef void (*UniffiForeignFutureCompleteU16)(uint64_t, UniffiForeignFutureResultU16
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I16
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I16
-typedef struct UniffiForeignFutureStructI16 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I16
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I16
+typedef struct UniffiForeignFutureResultI16 {
     int16_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI16;
+} UniffiForeignFutureResultI16;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I16
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I16
-typedef void (*UniffiForeignFutureCompleteI16)(uint64_t, UniffiForeignFutureStructI16
+typedef void (*UniffiForeignFutureCompleteI16)(uint64_t, UniffiForeignFutureResultI16
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U32
-typedef struct UniffiForeignFutureStructU32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U32
+typedef struct UniffiForeignFutureResultU32 {
     uint32_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU32;
+} UniffiForeignFutureResultU32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U32
-typedef void (*UniffiForeignFutureCompleteU32)(uint64_t, UniffiForeignFutureStructU32
+typedef void (*UniffiForeignFutureCompleteU32)(uint64_t, UniffiForeignFutureResultU32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I32
-typedef struct UniffiForeignFutureStructI32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I32
+typedef struct UniffiForeignFutureResultI32 {
     int32_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI32;
+} UniffiForeignFutureResultI32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I32
-typedef void (*UniffiForeignFutureCompleteI32)(uint64_t, UniffiForeignFutureStructI32
+typedef void (*UniffiForeignFutureCompleteI32)(uint64_t, UniffiForeignFutureResultI32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U64
-typedef struct UniffiForeignFutureStructU64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U64
+typedef struct UniffiForeignFutureResultU64 {
     uint64_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU64;
+} UniffiForeignFutureResultU64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U64
-typedef void (*UniffiForeignFutureCompleteU64)(uint64_t, UniffiForeignFutureStructU64
+typedef void (*UniffiForeignFutureCompleteU64)(uint64_t, UniffiForeignFutureResultU64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I64
-typedef struct UniffiForeignFutureStructI64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I64
+typedef struct UniffiForeignFutureResultI64 {
     int64_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI64;
+} UniffiForeignFutureResultI64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I64
-typedef void (*UniffiForeignFutureCompleteI64)(uint64_t, UniffiForeignFutureStructI64
+typedef void (*UniffiForeignFutureCompleteI64)(uint64_t, UniffiForeignFutureResultI64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F32
-typedef struct UniffiForeignFutureStructF32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F32
+typedef struct UniffiForeignFutureResultF32 {
     float returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructF32;
+} UniffiForeignFutureResultF32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F32
-typedef void (*UniffiForeignFutureCompleteF32)(uint64_t, UniffiForeignFutureStructF32
+typedef void (*UniffiForeignFutureCompleteF32)(uint64_t, UniffiForeignFutureResultF32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F64
-typedef struct UniffiForeignFutureStructF64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F64
+typedef struct UniffiForeignFutureResultF64 {
     double returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructF64;
+} UniffiForeignFutureResultF64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F64
-typedef void (*UniffiForeignFutureCompleteF64)(uint64_t, UniffiForeignFutureStructF64
+typedef void (*UniffiForeignFutureCompleteF64)(uint64_t, UniffiForeignFutureResultF64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_POINTER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_POINTER
-typedef struct UniffiForeignFutureStructPointer {
-    void*_Nonnull returnValue;
-    RustCallStatus callStatus;
-} UniffiForeignFutureStructPointer;
-
-#endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_POINTER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_POINTER
-typedef void (*UniffiForeignFutureCompletePointer)(uint64_t, UniffiForeignFutureStructPointer
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_RUST_BUFFER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_RUST_BUFFER
-typedef struct UniffiForeignFutureStructRustBuffer {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_RUST_BUFFER
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_RUST_BUFFER
+typedef struct UniffiForeignFutureResultRustBuffer {
     RustBuffer returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructRustBuffer;
+} UniffiForeignFutureResultRustBuffer;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_RUST_BUFFER
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_RUST_BUFFER
-typedef void (*UniffiForeignFutureCompleteRustBuffer)(uint64_t, UniffiForeignFutureStructRustBuffer
+typedef void (*UniffiForeignFutureCompleteRustBuffer)(uint64_t, UniffiForeignFutureResultRustBuffer
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_VOID
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_VOID
-typedef struct UniffiForeignFutureStructVoid {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_VOID
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_VOID
+typedef struct UniffiForeignFutureResultVoid {
     RustCallStatus callStatus;
-} UniffiForeignFutureStructVoid;
+} UniffiForeignFutureResultVoid;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_VOID
-typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureStructVoid
+typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureResultVoid
     );
 
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_CLONE_LOCALGPTCLIENT
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_CLONE_LOCALGPTCLIENT
-void*_Nonnull uniffi_localgpt_mobile_fn_clone_localgptclient(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_localgpt_mobile_fn_clone_localgptclient(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_FREE_LOCALGPTCLIENT
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_FREE_LOCALGPTCLIENT
-void uniffi_localgpt_mobile_fn_free_localgptclient(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_free_localgptclient(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_CONSTRUCTOR_LOCALGPTCLIENT_NEW
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_CONSTRUCTOR_LOCALGPTCLIENT_NEW
-void*_Nonnull uniffi_localgpt_mobile_fn_constructor_localgptclient_new(RustBuffer data_dir, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_localgpt_mobile_fn_constructor_localgptclient_new(RustBuffer data_dir, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CHAT
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CHAT
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_chat(void*_Nonnull ptr, RustBuffer message, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_chat(uint64_t ptr, RustBuffer message, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CLEAR_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CLEAR_SESSION
-void uniffi_localgpt_mobile_fn_method_localgptclient_clear_session(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_clear_session(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_COMPACT_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_COMPACT_SESSION
-void uniffi_localgpt_mobile_fn_method_localgptclient_compact_session(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_compact_session(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CONFIGURE_PROVIDER
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_CONFIGURE_PROVIDER
-void uniffi_localgpt_mobile_fn_method_localgptclient_configure_provider(void*_Nonnull ptr, RustBuffer provider, RustBuffer api_key, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_configure_provider(uint64_t ptr, RustBuffer provider, RustBuffer api_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_HEARTBEAT
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_HEARTBEAT
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_heartbeat(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_heartbeat(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_MEMORY
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_MEMORY
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_memory(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_memory(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_MODEL
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_model(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_model(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_SOUL
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_GET_SOUL
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_soul(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_get_soul(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_IS_BRAND_NEW
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_IS_BRAND_NEW
-int8_t uniffi_localgpt_mobile_fn_method_localgptclient_is_brand_new(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+int8_t uniffi_localgpt_mobile_fn_method_localgptclient_is_brand_new(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_LIST_PROVIDERS
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_LIST_PROVIDERS
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_list_providers(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_list_providers(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_MEMORY_GET
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_MEMORY_GET
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_memory_get(void*_Nonnull ptr, RustBuffer filename, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_memory_get(uint64_t ptr, RustBuffer filename, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_MEMORY_SEARCH
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_MEMORY_SEARCH
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_memory_search(void*_Nonnull ptr, RustBuffer query, uint32_t max_results, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_memory_search(uint64_t ptr, RustBuffer query, uint32_t max_results, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_NEW_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_NEW_SESSION
-void uniffi_localgpt_mobile_fn_method_localgptclient_new_session(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_new_session(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SESSION_STATUS
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SESSION_STATUS
-RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_session_status(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_localgpt_mobile_fn_method_localgptclient_session_status(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_HEARTBEAT
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_HEARTBEAT
-void uniffi_localgpt_mobile_fn_method_localgptclient_set_heartbeat(void*_Nonnull ptr, RustBuffer content, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_set_heartbeat(uint64_t ptr, RustBuffer content, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_MODEL
-void uniffi_localgpt_mobile_fn_method_localgptclient_set_model(void*_Nonnull ptr, RustBuffer model, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_set_model(uint64_t ptr, RustBuffer model, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_SOUL
 #define UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_METHOD_LOCALGPTCLIENT_SET_SOUL
-void uniffi_localgpt_mobile_fn_method_localgptclient_set_soul(void*_Nonnull ptr, RustBuffer content, RustCallStatus *_Nonnull out_status
+void uniffi_localgpt_mobile_fn_method_localgptclient_set_soul(uint64_t ptr, RustBuffer content, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOCALGPT_MOBILE_FN_FUNC_GET_WELCOME_MESSAGE
@@ -575,26 +567,6 @@ void ffi_localgpt_mobile_rust_future_free_f64(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_COMPLETE_F64
 #define UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_COMPLETE_F64
 double ffi_localgpt_mobile_rust_future_complete_f64(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_POLL_POINTER
-#define UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_POLL_POINTER
-void ffi_localgpt_mobile_rust_future_poll_pointer(uint64_t handle, UniffiRustFutureContinuationCallback _Nonnull callback, uint64_t callback_data
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_CANCEL_POINTER
-#define UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_CANCEL_POINTER
-void ffi_localgpt_mobile_rust_future_cancel_pointer(uint64_t handle
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_FREE_POINTER
-#define UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_FREE_POINTER
-void ffi_localgpt_mobile_rust_future_free_pointer(uint64_t handle
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_COMPLETE_POINTER
-#define UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_COMPLETE_POINTER
-void*_Nonnull ffi_localgpt_mobile_rust_future_complete_pointer(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_LOCALGPT_MOBILE_RUST_FUTURE_POLL_RUST_BUFFER
