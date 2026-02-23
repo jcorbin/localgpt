@@ -39,6 +39,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		19DC6E0E2F4BA39400826CD9 /* LocalGPT */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				19DC6E302F4BA39600826CD9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = LocalGPT;
 			sourceTree = "<group>";
 		};
@@ -53,6 +56,16 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		19DC6E302F4BA39600826CD9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 19DC6E0B2F4BA39400826CD9 /* LocalGPT */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		19DC6E092F4BA39400826CD9 /* Frameworks */ = {

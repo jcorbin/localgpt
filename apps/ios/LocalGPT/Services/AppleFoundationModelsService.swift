@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import FoundationModels
 
 /// Service for Apple's on-device Foundation Models (Apple Intelligence).
@@ -31,12 +32,9 @@ class AppleFoundationModelsService: ObservableObject {
         }
     }
 
-    /// Send a message and get a streaming response.
-    /// Returns the final response text, or nil if unavailable.
-    func chat(
-        message: String,
-        onPartial: @escaping (String) -> Void
-    ) async throws -> String? {
+    /// Send a message and get a response.
+    /// Returns the response text, or nil if unavailable.
+    func chat(message: String) async throws -> String? {
         guard isAvailable, let session = session else {
             return nil
         }
@@ -45,16 +43,8 @@ class AppleFoundationModelsService: ObservableObject {
         defer { isProcessing = false }
 
         do {
-            // Stream response for better UX
-            let stream = try await session.streamResponse(to: message)
-            var fullResponse = ""
-
-            for try await partial in stream {
-                fullResponse = partial
-                onPartial(partial)
-            }
-
-            return fullResponse
+            let response = try await session.respond(to: message)
+            return response.content
         } catch {
             // If Apple Intelligence fails, return nil to trigger fallback
             print("Apple Foundation Models error: \(error)")

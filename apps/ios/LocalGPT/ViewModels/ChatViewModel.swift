@@ -47,20 +47,12 @@ class ChatViewModel: ObservableObject {
 
         isThinking = true
 
-        // Create a placeholder message for streaming updates
-        let assistantIndex = messages.count
-        messages.append(Message(text: "", isUser: false))
-
         Task(priority: .userInitiated) {
             var response: String?
 
             // Try Apple Foundation Models first (on-device, free, private)
             if appleService.isAvailable {
-                response = try? await appleService.chat(message: text) { partial in
-                    Task { @MainActor in
-                        self.messages[assistantIndex] = Message(text: partial, isUser: false)
-                    }
-                }
+                response = try? await appleService.chat(message: text)
             }
 
             // Fallback to Rust client (cloud API)
@@ -72,10 +64,7 @@ class ChatViewModel: ObservableObject {
             await MainActor.run {
                 self.isThinking = false
                 if let response = response, !response.isEmpty {
-                    self.messages[assistantIndex] = Message(text: response, isUser: false)
-                } else {
-                    // Remove placeholder if no response
-                    self.messages.removeLast()
+                    self.messages.append(Message(text: response, isUser: false))
                 }
             }
         }
