@@ -8,25 +8,33 @@ class ChatViewModel: ObservableObject {
     @Published var isThinking = false
     @Published var showError = false
     @Published var lastError: String?
+    @Published var isUsingOnDevice = false  // True when using Apple Intelligence
 
     private var client: LocalGptClient?
+    private var appleService = AppleFoundationModelsService()
 
     init() {
         setupClient()
     }
 
     private func setupClient() {
+        // Check if Apple Intelligence is available
+        isUsingOnDevice = appleService.isAvailable
+
         do {
             // Use standard iOS documents directory for LocalGPT workspace
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             let dataDir = docs.appendingPathComponent("LocalGPT", isDirectory: true).path
 
-            // Initialize the Rust client
+            // Initialize the Rust client (used as fallback)
             self.client = try LocalGptClient(dataDir: dataDir)
 
             // Add a welcome message if it's a new workspace
             if client?.isBrandNew() ?? false {
-                messages.append(Message(text: getWelcomeMessage(), isUser: false))
+                let modeInfo = appleService.isAvailable
+                    ? " (using on-device Apple Intelligence)"
+                    : " (using cloud API - configure in settings)"
+                messages.append(Message(text: getWelcomeMessage() + modeInfo, isUser: false))
             }
         } catch {
             handleError(error)
@@ -39,24 +47,51 @@ class ChatViewModel: ObservableObject {
 
         isThinking = true
 
-        // Capture client on the main actor to avoid crossing actor boundaries
-        let capturedClient = self.client
+        // Create a placeholder message for streaming updates
+        let assistantIndex = messages.count
+        messages.append(Message(text: "", isUser: false))
 
         Task(priority: .userInitiated) {
-            do {
-                guard let client = capturedClient else { return }
+            var response: String?
 
-                // Call Rust core
-                let response = try client.chat(message: text)
-
-                await MainActor.run {
-                    self.isThinking = false
-                    self.messages.append(Message(text: response, isUser: false))
+            // Try Apple Foundation Models first (on-device, free, private)
+            if appleService.isAvailable {
+                response = try? await appleService.chat(message: text) { partial in
+                    Task { @MainActor in
+                        self.messages[assistantIndex] = Message(text: partial, isUser: false)
+                    }
                 }
-            } catch {
-                await MainActor.run {
-                    self.isThinking = false
-                    self.handleError(error)
+            }
+
+            // Fallback to Rust client (cloud API)
+            if response == nil {
+                isUsingOnDevice = false
+                response = await sendViaRustClient(text: text)
+            }
+
+            await MainActor.run {
+                self.isThinking = false
+                if let response = response, !response.isEmpty {
+                    self.messages[assistantIndex] = Message(text: response, isUser: false)
+                } else {
+                    // Remove placeholder if no response
+                    self.messages.removeLast()
+                }
+            }
+        }
+    }
+
+    private func sendViaRustClient(text: String) async -> String? {
+        guard let client = client else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            Task.detached(priority: .userInitiated) {
+                do {
+                    let response = try client.chat(message: text)
+                    continuation.resume(returning: response)
+                } catch {
+                    print("Rust client error: \(error)")
+                    continuation.resume(returning: nil)
                 }
             }
         }
@@ -67,15 +102,14 @@ class ChatViewModel: ObservableObject {
             try client?.newSession()
             messages.removeAll()
             if client?.isBrandNew() ?? false {
-                messages.append(Message(text: getWelcomeMessage(), isUser: false))
+                let modeInfo = appleService.isAvailable
+                    ? " (using on-device Apple Intelligence)"
+                    : " (using cloud API)"
+                messages.append(Message(text: getWelcomeMessage() + modeInfo, isUser: false))
             }
         } catch {
             handleError(error)
         }
-    }
-
-    private func getClient() -> LocalGptClient? {
-        return client
     }
 
     private func handleError(_ error: Error) {
@@ -83,4 +117,3 @@ class ChatViewModel: ObservableObject {
         self.showError = true
     }
 }
-
