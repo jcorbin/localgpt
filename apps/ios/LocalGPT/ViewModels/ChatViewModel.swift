@@ -31,9 +31,12 @@ class ChatViewModel: ObservableObject {
 
             // Add a welcome message if it's a new workspace
             if client?.isBrandNew() ?? false {
-                let modeInfo = appleService.isAvailable
-                    ? " (using on-device Apple Intelligence)"
-                    : " (using cloud API - configure in settings)"
+                let modeInfo: String
+                if appleService.isAvailable {
+                    modeInfo = "\n\n✅ Using on-device Apple Intelligence (free, private)"
+                } else {
+                    modeInfo = "\n\n☁️ Cloud API mode - add an API key to config.toml to enable chat."
+                }
                 messages.append(Message(text: getWelcomeMessage() + modeInfo, isUser: false))
             }
         } catch {
@@ -49,10 +52,14 @@ class ChatViewModel: ObservableObject {
 
         Task(priority: .userInitiated) {
             var response: String?
+            var usedOnDevice = false
 
             // Try Apple Foundation Models first (on-device, free, private)
             if appleService.isAvailable {
                 response = try? await appleService.chat(message: text)
+                if response != nil {
+                    usedOnDevice = true
+                }
             }
 
             // Fallback to Rust client (cloud API)
@@ -64,7 +71,12 @@ class ChatViewModel: ObservableObject {
             await MainActor.run {
                 self.isThinking = false
                 if let response = response, !response.isEmpty {
+                    self.isUsingOnDevice = usedOnDevice
                     self.messages.append(Message(text: response, isUser: false))
+                } else {
+                    // Both failed - show error
+                    self.showError = true
+                    self.lastError = "No AI provider available. Add an API key to config.toml"
                 }
             }
         }
