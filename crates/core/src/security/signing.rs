@@ -73,12 +73,11 @@ pub fn ensure_device_key(state_dir: &Path) -> Result<()> {
 
     fs::write(&key_path, key).context("Failed to write device key")?;
 
-    // Set permissions to 0600 on Unix
-    #[cfg(unix)]
+    // Set permissions to 0600 on Unix (skip on iOS/Android - sandbox doesn't allow)
+    #[cfg(all(unix, not(target_os = "ios"), not(target_os = "android")))]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600))
-            .context("Failed to set device key permissions")?;
+        let _ = fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600));
     }
 
     tracing::info!("Generated device key at {}", key_path.display());
