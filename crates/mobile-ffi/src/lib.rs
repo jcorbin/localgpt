@@ -67,8 +67,17 @@ impl LocalGPTClient {
         let config =
             Config::load_from_dir(&data_dir).map_err(|e| MobileError::Init(e.to_string()))?;
 
+        // Mobile builds exclude claude-cli feature (no subprocess support).
+        // If config has claude-cli/* model, override to API-based default.
+        let model = if config.agent.default_model.starts_with("claude-cli/") {
+            // Default to Anthropic API for mobile (requires api_key in config)
+            "anthropic/claude-sonnet-4-6".to_string()
+        } else {
+            config.agent.default_model.clone()
+        };
+
         let agent_config = AgentConfig {
-            model: config.agent.default_model.clone(),
+            model,
             context_window: config.agent.context_window,
             reserve_tokens: config.agent.reserve_tokens,
         };
