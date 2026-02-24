@@ -6,6 +6,7 @@ pub mod config;
 pub mod daemon;
 #[cfg(feature = "desktop")]
 pub mod desktop;
+pub mod doctor;
 #[cfg(feature = "gen")]
 pub mod gen3d;
 pub mod init;
@@ -93,4 +94,7 @@ pub enum Commands {
 
     /// Manage bridges and credentials
     Bridge(bridge::BridgeArgs),
+
+    /// Run diagnostics to validate setup
+    Doctor(doctor::DoctorArgs),
 }

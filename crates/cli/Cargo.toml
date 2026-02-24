@@ -45,6 +45,8 @@ serde_urlencoded = "0.7"
 
 # CLI
 clap = { version = "4.5", features = ["derive", "env"] }
+which = "7"
+croner = "2"
 
 # CLI line editor
 rustyline = "17.0.2"

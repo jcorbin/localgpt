@@ -4,6 +4,7 @@ pub mod path_utils;
 pub mod providers;
 pub mod sanitize;
 pub mod session;
+pub mod session_pruning;
 pub mod session_store;
 pub mod skills;
 pub mod system_prompt;
@@ -25,6 +26,7 @@ pub use session::{
     get_last_session_id, get_last_session_id_for_agent, get_sessions_dir_for_agent, get_state_dir,
     list_sessions, list_sessions_for_agent, search_sessions, search_sessions_for_agent,
 };
+pub use session_pruning::{PruneResult, preview_prune, prune_all_agents, prune_sessions};
 pub use session_store::{SessionEntry, SessionStore};
 pub use skills::{Skill, SkillInvocation, get_skills_summary, load_skills, parse_skill_command};
 pub use system_prompt::{

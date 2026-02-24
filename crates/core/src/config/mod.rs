@@ -1,8 +1,10 @@
 mod migrate;
 mod schema;
+pub mod watcher;
 
 pub use migrate::check_openclaw_detected;
 pub use schema::*;
+pub use watcher::{ConfigWatcher, spawn_sighup_handler};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -93,10 +95,28 @@ pub struct AgentConfig {
     /// loop detection triggers. Default: 3. Set to 0 to disable loop detection.
     #[serde(default = "default_max_tool_repeats")]
     pub max_tool_repeats: usize,
+
+    /// Maximum age for session files before pruning (in seconds).
+    /// 0 = keep forever. Default: 30 days.
+    #[serde(default = "default_session_max_age")]
+    pub session_max_age: u64,
+
+    /// Maximum number of sessions to keep per agent.
+    /// 0 = unlimited. Default: 500.
+    #[serde(default = "default_session_max_count")]
+    pub session_max_count: usize,
 }
 
 fn default_max_tool_repeats() -> usize {
     3
+}
+
+fn default_session_max_age() -> u64 {
+    30 * 24 * 60 * 60 // 30 days in seconds
+}
+
+fn default_session_max_count() -> usize {
+    500
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -662,6 +682,16 @@ pub struct ServerConfig {
 
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+
+    /// Maximum request body size in bytes.
+    /// Requests larger than this return 413 Payload Too Large.
+    /// Default: 10MB
+    #[serde(default = "default_max_request_body")]
+    pub max_request_body: usize,
+}
+
+fn default_max_request_body() -> usize {
+    10 * 1024 * 1024 // 10MB
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -926,6 +956,8 @@ impl Default for AgentConfig {
             subagent_model: None,        // Use default_model if not specified
             fallback_models: Vec::new(), // No fallbacks by default
             max_tool_repeats: default_max_tool_repeats(), // Loop detection threshold
+            session_max_age: default_session_max_age(), // 30 days
+            session_max_count: default_session_max_count(), // 500 sessions
         }
     }
 }
@@ -982,6 +1014,7 @@ impl Default for ServerConfig {
             bind: default_bind(),
             auth_token: None,
             rate_limit: RateLimitConfig::default(),
+            max_request_body: default_max_request_body(),
         }
     }
 }

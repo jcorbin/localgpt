@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::task::JoinSet;
 
 #[cfg(unix)]
@@ -12,6 +13,7 @@ use localgpt_core::config::Config;
 use localgpt_core::heartbeat::HeartbeatRunner;
 use localgpt_core::memory::MemoryManager;
 use localgpt_server::Server;
+use std::time::Duration;
 
 /// Synchronously stop the daemon (for use before Tokio runtime starts)
 pub fn stop_sync() -> Result<()> {
@@ -139,9 +141,29 @@ async fn run_daemon_server(config: Config, agent_id: &str) -> Result<()> {
     let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), agent_id)?;
     let _watcher = memory.start_watcher()?;
 
+    // Create config watcher for hot-reload support
+    let config_watcher = match Config::load() {
+        Ok(cfg) => match localgpt_core::config::ConfigWatcher::start(cfg) {
+            Ok(w) => {
+                println!("  Config hot-reload: enabled");
+                Some(Arc::new(w))
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start config watcher: {}", e);
+                None
+            }
+        },
+        Err(_) => None,
+    };
+
+    // Set up SIGHUP handler for manual config reload
+    if let Some(ref watcher) = config_watcher {
+        localgpt_core::config::spawn_sighup_handler(watcher.clone());
+    }
+
     println!("Daemon started successfully");
 
-    run_daemon_services(&config, agent_id).await?;
+    run_daemon_services(&config, agent_id, config_watcher).await?;
 
     println!("\nShutting down...");
     let pid_file = get_pid_file()?;
@@ -151,12 +173,66 @@ async fn run_daemon_server(config: Config, agent_id: &str) -> Result<()> {
 }
 
 /// Run daemon services (server and/or heartbeat)
-async fn run_daemon_services(config: &Config, agent_id: &str) -> Result<()> {
+async fn run_daemon_services(
+    config: &Config,
+    agent_id: &str,
+    // Config watcher is available for services that need hot-reload support
+    // Services can subscribe to config changes via config_watcher.subscribe()
+    _config_watcher: Option<Arc<localgpt_core::config::ConfigWatcher>>,
+) -> Result<()> {
     // Create shared turn gate for heartbeat + HTTP concurrency control
     let turn_gate = TurnGate::new();
 
     // Collect all running JoinHandles
     let mut handles = JoinSet::new();
+
+    // Note: Services that need hot-reload should subscribe to config_watcher.subscribe()
+    // and update their internal state when a new config is received.
+    // For simplicity, most services currently use the config passed at startup.
+
+    // Run session pruning at startup
+    if config.agent.session_max_age > 0 || config.agent.session_max_count > 0 {
+        let paths = localgpt_core::paths::Paths::resolve()?;
+        let max_age = if config.agent.session_max_age > 0 {
+            Some(Duration::from_secs(config.agent.session_max_age))
+        } else {
+            None
+        };
+        let max_count = if config.agent.session_max_count > 0 {
+            Some(config.agent.session_max_count)
+        } else {
+            None
+        };
+
+        match localgpt_core::agent::prune_all_agents(&paths.state_dir, max_age, max_count) {
+            Ok(result) if result.deleted > 0 => {
+                println!(
+                    "  Session pruning: deleted {} old sessions (freed {} bytes)",
+                    result.deleted, result.freed_bytes
+                );
+            }
+            Ok(_) => {
+                println!("  Session pruning: no old sessions to delete");
+            }
+            Err(e) => {
+                tracing::warn!("Session pruning failed: {}", e);
+            }
+        }
+
+        // Spawn periodic session pruning task (every hour)
+        let state_dir = paths.state_dir.clone();
+        handles.spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 60));
+            loop {
+                interval.tick().await;
+                if let Err(e) =
+                    localgpt_core::agent::prune_all_agents(&state_dir, max_age, max_count)
+                {
+                    tracing::warn!("Periodic session pruning failed: {}", e);
+                }
+            }
+        });
+    }
 
     // Spawn heartbeat in background if enabled
     if config.heartbeat.enabled {
@@ -373,9 +449,26 @@ async fn start_daemon(foreground: bool, agent_id: &str) -> Result<()> {
     let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), agent_id)?;
     let _watcher = memory.start_watcher()?;
 
+    // Create config watcher for hot-reload support
+    let config_watcher = match localgpt_core::config::ConfigWatcher::start(config.clone()) {
+        Ok(w) => {
+            println!("  Config hot-reload: enabled");
+            Some(Arc::new(w))
+        }
+        Err(e) => {
+            tracing::warn!("Failed to start config watcher: {}", e);
+            None
+        }
+    };
+
+    // Set up SIGHUP handler for manual config reload
+    if let Some(ref watcher) = config_watcher {
+        localgpt_core::config::spawn_sighup_handler(watcher.clone());
+    }
+
     println!("Daemon started successfully");
 
-    run_daemon_services(&config, agent_id).await?;
+    run_daemon_services(&config, agent_id, config_watcher).await?;
 
     println!("\nShutting down...");
     fs::remove_file(&pid_file).ok();

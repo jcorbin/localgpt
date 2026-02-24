@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{debug, info};
 
 use localgpt_core::agent::{Agent, AgentConfig, StreamEvent, extract_tool_detail};
@@ -200,6 +201,9 @@ impl Server {
         let app = public_routes
             .merge(api_routes)
             .merge(openai_routes)
+            .layer(RequestBodyLimitLayer::new(
+                self.config.server.max_request_body,
+            ))
             .layer(cors)
             .with_state(state);
 
