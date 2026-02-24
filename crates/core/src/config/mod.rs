@@ -82,6 +82,15 @@ pub struct AgentConfig {
     /// Example: ["openai/gpt-4o", "ollama/llama3"]
     #[serde(default)]
     pub fallback_models: Vec<String>,
+
+    /// Maximum times the same tool can be called with identical arguments before
+    /// loop detection triggers. Default: 3. Set to 0 to disable loop detection.
+    #[serde(default = "default_max_tool_repeats")]
+    pub max_tool_repeats: usize,
+}
+
+fn default_max_tool_repeats() -> usize {
+    3
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -822,6 +831,7 @@ impl Default for AgentConfig {
             max_spawn_depth: Some(1), // Single-level spawning by default
             subagent_model: None,     // Use default_model if not specified
             fallback_models: Vec::new(), // No fallbacks by default
+            max_tool_repeats: default_max_tool_repeats(), // Loop detection threshold
         }
     }
 }
@@ -1215,6 +1225,11 @@ reserve_tokens = 8000
 # Automatically try fallback models if primary fails with retryable errors
 # (rate limits, server errors, timeouts). Providers tried in order.
 # fallback_models = ["openai/gpt-4o", "ollama/llama3"]
+
+# Loop detection (optional)
+# Maximum times the same tool can be called with identical arguments
+# before detection triggers. Default: 3. Set to 0 to disable.
+# max_tool_repeats = 3
 
 # Anthropic API (for anthropic/* models)
 # [providers.anthropic]

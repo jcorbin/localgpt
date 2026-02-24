@@ -93,6 +93,59 @@ pub struct Agent {
     search_cost_usd: f64,
     /// Verified security policy content (None if missing, unsigned, or tampered)
     verified_security_policy: Option<String>,
+    /// Loop detection for repeated tool calls
+    loop_detector: LoopDetector,
+}
+
+/// Detects when the agent is stuck in a tool-call loop
+struct LoopDetector {
+    /// Recent tool calls: (tool_name, arguments_hash)
+    recent_calls: Vec<(String, String)>,
+    /// Maximum repeats before detection triggers (0 = disabled)
+    max_repeats: usize,
+}
+
+impl LoopDetector {
+    fn new(max_repeats: usize) -> Self {
+        Self {
+            recent_calls: Vec::new(),
+            max_repeats,
+        }
+    }
+
+    /// Record a tool call and check if we're stuck
+    fn record(&mut self, tool_name: &str, arguments: &str) {
+        if self.max_repeats == 0 {
+            return; // Detection disabled
+        }
+
+        // Hash arguments to detect similar calls
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        arguments.trim().hash(&mut hasher);
+        let hash = format!("{}:{}", tool_name, hasher.finish());
+        self.recent_calls.push((tool_name.to_string(), hash));
+    }
+
+    /// Check if we're stuck in a loop (same tool+args repeated)
+    fn is_stuck(&self) -> bool {
+        if self.max_repeats == 0 || self.recent_calls.len() < self.max_repeats {
+            return false;
+        }
+        let last_n = &self.recent_calls[self.recent_calls.len() - self.max_repeats..];
+        // Check if all recent calls are identical
+        last_n.windows(2).all(|w| w[0].1 == w[1].1)
+    }
+
+    /// Get the tool name from the last call
+    fn last_tool_name(&self) -> Option<&str> {
+        self.recent_calls.last().map(|(name, _)| name.as_str())
+    }
+
+    /// Reset for a new turn
+    fn reset(&mut self) {
+        self.recent_calls.clear();
+    }
 }
 
 impl Agent {
@@ -244,6 +297,7 @@ impl Agent {
             search_cached_hits: 0,
             search_cost_usd: 0.0,
             verified_security_policy,
+            loop_detector: LoopDetector::new(app_config.agent.max_tool_repeats),
         })
     }
 
@@ -303,6 +357,8 @@ impl Agent {
             }
         };
 
+        let max_tool_repeats = app_config.agent.max_tool_repeats;
+
         Ok(Self {
             config: agent_config,
             app_config,
@@ -315,6 +371,7 @@ impl Agent {
             search_cached_hits: 0,
             search_cost_usd: 0.0,
             verified_security_policy,
+            loop_detector: LoopDetector::new(max_tool_repeats),
         })
     }
 
@@ -596,6 +653,9 @@ impl Agent {
         message: &str,
         images: Vec<ImageAttachment>,
     ) -> Result<String> {
+        // Reset loop detector for new turn
+        self.loop_detector.reset();
+
         // Add user message with images
         self.session.add_message(Message {
             role: Role::User,
@@ -665,6 +725,30 @@ impl Agent {
                         "Executing tool: {} with args: {}",
                         call.name, call.arguments
                     );
+
+                    // Check for stuck loop before executing
+                    self.loop_detector.record(&call.name, &call.arguments);
+                    if self.loop_detector.is_stuck() {
+                        let tool_name = self.loop_detector.last_tool_name().unwrap_or("unknown");
+                        tracing::warn!(
+                            "Stuck loop detected: {} called {} times with same args",
+                            tool_name,
+                            self.loop_detector.max_repeats
+                        );
+
+                        // Return a system message to break the loop
+                        let stuck_msg = format!(
+                            "SYSTEM: You have called '{}' {} times with the same arguments. \
+                             This appears to be a loop. Please try a different approach or \
+                             respond to the user explaining what went wrong.",
+                            tool_name,
+                            self.loop_detector.max_repeats
+                        );
+
+                        // Reset detector and return the message
+                        self.loop_detector.reset();
+                        return Ok(stuck_msg);
+                    }
 
                     let result = self.execute_tool(call).await;
                     let output = match result {
