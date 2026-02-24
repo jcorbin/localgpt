@@ -7,10 +7,11 @@ use anyhow::Result;
 use axum::{
     Router,
     extract::{
-        Path, Query, State,
+        Path, Query, Request, State,
         ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
     http::{StatusCode, header},
+    middleware::{self, Next},
     response::{
         IntoResponse, Json, Response,
         sse::{Event, Sse},
@@ -135,12 +136,15 @@ impl Server {
             .allow_methods(Any)
             .allow_headers(Any);
 
-        let app = Router::new()
-            // Web UI routes
+        // Public routes (no auth required)
+        let public_routes = Router::new()
             .route("/", get(serve_ui_index))
             .route("/ui/{*path}", get(serve_ui_file))
-            // API routes
             .route("/health", get(health_check))
+            .route("/api/auth/status", get(auth_status));
+
+        // Protected API routes (auth required if token configured)
+        let api_routes = Router::new()
             .route("/api/sessions", post(create_session))
             .route("/api/sessions", get(list_sessions))
             .route("/api/sessions/{session_id}", delete(delete_session))
@@ -164,6 +168,10 @@ impl Server {
             .route("/api/saved-sessions", get(list_saved_sessions))
             .route("/api/saved-sessions/{session_id}", get(get_saved_session))
             .route("/api/logs/daemon", get(get_daemon_logs))
+            .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+
+        let app = public_routes
+            .merge(api_routes)
             .layer(cors)
             .with_state(state);
 
@@ -186,6 +194,46 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (self.0, self.1).into_response()
     }
+}
+
+// Auth middleware for API routes
+async fn auth_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    // If no token configured, pass through (backward compat)
+    let Some(expected) = &state.config.server.auth_token else {
+        return Ok(next.run(request).await);
+    };
+
+    let auth_header = request
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok());
+
+    match auth_header {
+        Some(h) if h.starts_with("Bearer ") => {
+            let token = &h[7..];
+            if token == expected {
+                Ok(next.run(request).await)
+            } else {
+                debug!("Auth failed: invalid token");
+                Err(StatusCode::UNAUTHORIZED)
+            }
+        }
+        _ => {
+            debug!("Auth failed: missing or invalid Authorization header");
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
+}
+
+// Auth status endpoint (public, tells client if auth is required)
+async fn auth_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(json!({
+        "auth_required": state.config.server.auth_token.is_some()
+    }))
 }
 
 // Session cleanup task

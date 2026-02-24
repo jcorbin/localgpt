@@ -637,6 +637,13 @@ pub struct ServerConfig {
 
     #[serde(default = "default_bind")]
     pub bind: String,
+
+    /// Bearer token for API authentication.
+    /// If set, all /api/* routes require Authorization: Bearer <token>.
+    /// Supports ${ENV_VAR} expansion.
+    /// If unset, auth is disabled (backward compatible for local-only use).
+    #[serde(default)]
+    pub auth_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -869,6 +876,7 @@ impl Default for ServerConfig {
             enabled: default_true(),
             port: default_port(),
             bind: default_bind(),
+            auth_token: None,
         }
     }
 }
@@ -1045,6 +1053,9 @@ impl Config {
         if let Some(ref mut openai_compat) = self.providers.openai_compatible {
             openai_compat.api_key = expand_env(&openai_compat.api_key);
             openai_compat.base_url = expand_env(&openai_compat.base_url);
+        }
+        if let Some(ref mut auth_token) = self.server.auth_token {
+            *auth_token = expand_env(auth_token);
         }
     }
 
@@ -1261,6 +1272,8 @@ interval = "30m"
 enabled = true
 port = 31327
 bind = "127.0.0.1"
+# Optional bearer token for API authentication
+# auth_token = "${LOCALGPT_AUTH_TOKEN}"
 
 [logging]
 level = "info"
