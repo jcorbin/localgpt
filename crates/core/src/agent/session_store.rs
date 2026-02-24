@@ -183,6 +183,14 @@ impl SessionStore {
         fs::write(&tmp_path, &content)?;
         fs::rename(&tmp_path, &self.path)?;
 
+        // Restrict permissions: session metadata may contain sensitive info
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            fs::set_permissions(&self.path, perms)?;
+        }
+
         debug!("Saved session store to {:?}", self.path);
         Ok(())
     }
