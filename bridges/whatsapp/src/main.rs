@@ -167,7 +167,8 @@ async fn process_message(state: Arc<BridgeState>, chat_id: String, text: String)
             reserve_tokens: state.config.agent.reserve_tokens,
         };
 
-        let mut agent = Agent::new(agent_config, &state.config, state.memory.clone()).await?;
+        let mut agent =
+            Agent::new(agent_config, &state.config, Arc::new(state.memory.clone())).await?;
         agent.new_session().await?;
 
         e.insert(SessionEntry {

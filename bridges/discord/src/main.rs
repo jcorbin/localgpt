@@ -472,7 +472,13 @@ impl Handler {
                 reserve_tokens: self.state.config.agent.reserve_tokens,
             };
 
-            match Agent::new(agent_config, &self.state.config, self.state.memory.clone()).await {
+            match Agent::new(
+                agent_config,
+                &self.state.config,
+                Arc::new(self.state.memory.clone()),
+            )
+            .await
+            {
                 Ok(mut agent) => {
                     if let Err(err) = agent.new_session().await {
                         error!("Failed to create session: {}", err);

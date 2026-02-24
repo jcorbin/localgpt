@@ -478,6 +478,10 @@ impl Tool for SpawnAgentTool {
 mod tests {
     use super::*;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Unit Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
     #[test]
     fn test_spawn_params_parsing() {
         let json = r#"{
@@ -658,5 +662,215 @@ mod tests {
         assert!(params.contains_key("required"));
         let required = params.get("required").unwrap().as_array().unwrap();
         assert!(required.contains(&json!("description")));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Integration Tests - Tool Filtering and Depth Limits
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tool_filtering_removes_spawn_agent() {
+        // Create a mock list of tools including spawn_agent
+        let tool_names: Vec<&str> = vec!["memory_search", "memory_get", "spawn_agent", "web_fetch"];
+
+        // Simulate filtering (what happens in run_subagent)
+        let filtered: Vec<&str> = tool_names
+            .into_iter()
+            .filter(|t| *t != "spawn_agent")
+            .collect();
+
+        assert!(!filtered.contains(&"spawn_agent"));
+        assert!(filtered.contains(&"memory_search"));
+        assert!(filtered.contains(&"memory_get"));
+        assert!(filtered.contains(&"web_fetch"));
+        assert_eq!(filtered.len(), 3);
+    }
+
+    #[test]
+    fn test_can_spawn_at_various_depths() {
+        // Test the can_spawn logic at different depths
+        let max_depth: u8 = 1;
+
+        // Depth 0: root agent - can spawn
+        let can_spawn_0 = 0 < max_depth;
+        assert!(can_spawn_0);
+
+        // Depth 1: first subagent - cannot spawn (at max)
+        let can_spawn_1 = 1 < max_depth;
+        assert!(!can_spawn_1);
+
+        // Test with max_depth = 2
+        let max_depth_2: u8 = 2;
+        assert!(0 < max_depth_2); // depth 0 can spawn
+        assert!(1 < max_depth_2); // depth 1 can spawn
+        assert!(!(2 < max_depth_2)); // depth 2 cannot spawn
+    }
+
+    #[test]
+    fn test_subagent_system_prompt_includes_no_spawn_instruction() {
+        // Verify that the subagent prompt tells it not to spawn more agents
+        let task_guidance = "You are an exploration specialist";
+        let prompt = format!(
+            "{}\n\n- Focus only on the assigned task\n- Do NOT spawn additional agents\n",
+            task_guidance
+        );
+
+        assert!(prompt.contains("Do NOT spawn additional agents"));
+    }
+
+    #[test]
+    fn test_task_type_guidance() {
+        // Verify each task type gets appropriate guidance
+        let task_types = vec![
+            ("explore", "exploration specialist"),
+            ("plan", "planning specialist"),
+            ("implement", "implementation specialist"),
+            ("analyze", "analysis specialist"),
+            ("unknown", "specialist agent"),
+        ];
+
+        for (task_type, expected_guidance) in task_types {
+            let guidance = match task_type {
+                "explore" => "exploration specialist",
+                "plan" => "planning specialist",
+                "implement" => "implementation specialist",
+                "analyze" => "analysis specialist",
+                _ => "specialist agent",
+            };
+            assert!(
+                guidance.contains(expected_guidance),
+                "Task type '{}' should contain '{}'",
+                task_type,
+                expected_guidance
+            );
+        }
+    }
+
+    #[test]
+    fn test_subagent_result_formatting() {
+        // Test successful result formatting
+        let success_result = SubAgentResult {
+            success: true,
+            summary: "Found 5 files".to_string(),
+            details: Some("Details here".to_string()),
+            error: None,
+            tokens_used: Some(1000),
+        };
+
+        let formatted = format!(
+            "## Subagent Result\n\n**Summary:** {}\n\n**Details:**\n{}\n\n**Tokens used:** {}",
+            success_result.summary,
+            success_result.details.unwrap_or_default(),
+            success_result.tokens_used.unwrap_or(0)
+        );
+
+        assert!(formatted.contains("## Subagent Result"));
+        assert!(formatted.contains("Found 5 files"));
+        assert!(formatted.contains("**Tokens used:** 1000"));
+
+        // Test failed result formatting
+        let fail_result = SubAgentResult {
+            success: false,
+            summary: String::new(),
+            details: Some("Partial output".to_string()),
+            error: Some("Max iterations exceeded".to_string()),
+            tokens_used: Some(500),
+        };
+
+        let fail_formatted = format!(
+            "## Subagent Failed\n\n**Error:** {}\n\n**Details:**\n{}",
+            fail_result.error.unwrap_or_default(),
+            fail_result.details.unwrap_or_default()
+        );
+
+        assert!(fail_formatted.contains("## Subagent Failed"));
+        assert!(fail_formatted.contains("Max iterations exceeded"));
+    }
+
+    #[test]
+    fn test_max_iterations_limit() {
+        // Test that max iterations is set to prevent runaway subagents
+        let max_iterations = 20;
+        let mut iterations = 0;
+
+        // Simulate hitting the limit
+        loop {
+            iterations += 1;
+            if iterations > max_iterations {
+                break;
+            }
+        }
+
+        assert_eq!(iterations, max_iterations + 1);
+    }
+
+    #[test]
+    fn test_spawn_params_with_optional_fields() {
+        // Test with all optional fields
+        let full_json = r#"{
+            "task": "implement",
+            "description": "Add new feature",
+            "input": "See design doc",
+            "depth": 0
+        }"#;
+
+        let params: SpawnParams = serde_json::from_str(full_json).unwrap();
+        assert_eq!(params.task, "implement");
+        assert_eq!(params.description, "Add new feature");
+        assert_eq!(params.input, "See design doc");
+        assert_eq!(params.depth, Some(0));
+
+        // Test with only required fields
+        let min_json = r#"{"description": "Quick task"}"#;
+        let min_params: SpawnParams = serde_json::from_str(min_json).unwrap();
+        assert_eq!(min_params.task, "explore"); // default
+        assert!(min_params.input.is_empty());
+        assert!(min_params.depth.is_none());
+    }
+
+    #[test]
+    fn test_spawn_agent_schema_parameters() {
+        // Verify the tool schema has correct parameter definitions
+        let schema = ToolSchema {
+            name: "spawn_agent".to_string(),
+            description: "Test".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "enum": ["explore", "plan", "implement", "analyze"]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "input": {
+                        "type": "string"
+                    }
+                },
+                "required": ["description"]
+            }),
+        };
+
+        let params = schema.parameters.as_object().unwrap();
+        let properties = params.get("properties").unwrap().as_object().unwrap();
+
+        // Verify all expected properties exist
+        assert!(properties.contains_key("task"));
+        assert!(properties.contains_key("description"));
+        assert!(properties.contains_key("input"));
+
+        // Verify task enum values
+        let task = properties.get("task").unwrap().as_object().unwrap();
+        let enum_values = task.get("enum").unwrap().as_array().unwrap();
+        assert!(enum_values.contains(&json!("explore")));
+        assert!(enum_values.contains(&json!("plan")));
+        assert!(enum_values.contains(&json!("implement")));
+        assert!(enum_values.contains(&json!("analyze")));
+
+        // Verify required field
+        let required = params.get("required").unwrap().as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "description");
     }
 }

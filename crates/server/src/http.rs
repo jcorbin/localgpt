@@ -210,6 +210,7 @@ async fn cleanup_expired_sessions(state: &Arc<AppState>) {
 // Load persisted sessions from disk
 async fn load_persisted_sessions(state: &Arc<AppState>) -> Result<(), anyhow::Error> {
     use localgpt_core::agent::list_sessions_for_agent;
+    use std::sync::Arc as StdArc;
 
     let sessions_list = list_sessions_for_agent(HTTP_AGENT_ID)?;
     let mut loaded = 0;
@@ -221,7 +222,8 @@ async fn load_persisted_sessions(state: &Arc<AppState>) -> Result<(), anyhow::Er
             reserve_tokens: state.config.agent.reserve_tokens,
         };
 
-        let mut agent = Agent::new(agent_config, &state.config, state.memory.clone()).await?;
+        let memory = StdArc::new(state.memory.clone());
+        let mut agent = Agent::new(agent_config, &state.config, memory).await?;
 
         // Try to resume the session
         if agent.resume_session(&session_info.id).await.is_ok() {
@@ -312,7 +314,8 @@ async fn get_or_create_session(
         reserve_tokens: state.config.agent.reserve_tokens,
     };
 
-    let mut agent = Agent::new(agent_config, &state.config, state.memory.clone())
+    let memory = std::sync::Arc::new(state.memory.clone());
+    let mut agent = Agent::new(agent_config, &state.config, memory)
         .await
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

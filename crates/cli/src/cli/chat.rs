@@ -4,12 +4,13 @@ use futures::StreamExt;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use std::io::{self, Write};
+use std::sync::Arc;
 use tracing::debug;
 
 use localgpt_core::agent::{
-    Agent, AgentConfig, ImageAttachment, Skill, extract_tool_detail, get_last_session_id_for_agent,
-    get_skills_summary, list_sessions_for_agent, load_skills, parse_skill_command,
-    search_sessions_for_agent,
+    Agent, AgentConfig, ImageAttachment, Skill, create_spawn_agent_tool, extract_tool_detail,
+    get_last_session_id_for_agent, get_skills_summary, list_sessions_for_agent, load_skills,
+    parse_skill_command, search_sessions_for_agent,
 };
 use localgpt_core::concurrency::WorkspaceLock;
 use localgpt_core::config::Config;
@@ -118,7 +119,11 @@ pub struct ChatArgs {
 pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
     let config = Config::load()?;
     // Embedding provider is automatically created based on config.memory.embedding_provider
-    let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), agent_id)?;
+    let memory = Arc::new(MemoryManager::new_with_full_config(
+        &config.memory,
+        Some(&config),
+        agent_id,
+    )?);
 
     let agent_config = AgentConfig {
         model: args.model.unwrap_or(config.agent.default_model.clone()),
@@ -126,8 +131,10 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
         reserve_tokens: config.agent.reserve_tokens,
     };
 
-    let mut agent = Agent::new(agent_config, &config, memory).await?;
+    let mut agent = Agent::new(agent_config, &config, Arc::clone(&memory)).await?;
     agent.extend_tools(crate::tools::create_cli_tools(&config)?);
+    // Add spawn_agent tool for hierarchical delegation
+    agent.extend_tools(vec![create_spawn_agent_tool(config.clone(), memory)]);
     debug!("New agent with tools: {:?}", agent.tool_names());
 
     let workspace_lock = WorkspaceLock::new()?;

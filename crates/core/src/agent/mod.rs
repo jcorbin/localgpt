@@ -98,12 +98,11 @@ impl Agent {
     pub async fn new(
         config: AgentConfig,
         app_config: &Config,
-        memory: MemoryManager,
+        memory: Arc<MemoryManager>,
     ) -> Result<Self> {
         let provider = providers::create_provider(&config.model, app_config)?;
 
-        // Wrap memory in Arc so tools can share it
-        let memory = Arc::new(memory);
+        // Memory is already wrapped in Arc, create safe tools sharing it
         let tools = tools::create_safe_tools(app_config, Some(Arc::clone(&memory)))?;
 
         // Load and verify security policy

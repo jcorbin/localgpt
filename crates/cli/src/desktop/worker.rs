@@ -4,6 +4,7 @@
 //! It receives commands from the UI and sends back status updates.
 
 use std::pin::pin;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
@@ -11,8 +12,8 @@ use anyhow::Result;
 use futures::StreamExt;
 
 use localgpt_core::agent::{
-    Agent, AgentConfig, DEFAULT_AGENT_ID, StreamEvent, ToolCall, extract_tool_detail,
-    list_sessions_for_agent,
+    Agent, AgentConfig, DEFAULT_AGENT_ID, StreamEvent, ToolCall, create_spawn_agent_tool,
+    extract_tool_detail, list_sessions_for_agent,
 };
 use localgpt_core::config::Config;
 use localgpt_core::memory::MemoryManager;
@@ -77,7 +78,11 @@ async fn worker_loop(
 ) -> Result<()> {
     // Initialize agent
     let config = Config::load()?;
-    let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), &agent_id)?;
+    let memory = Arc::new(MemoryManager::new_with_full_config(
+        &config.memory,
+        Some(&config),
+        &agent_id,
+    )?);
 
     let agent_config = AgentConfig {
         model: config.agent.default_model.clone(),
@@ -85,8 +90,9 @@ async fn worker_loop(
         reserve_tokens: config.agent.reserve_tokens,
     };
 
-    let mut agent = Agent::new(agent_config, &config, memory).await?;
+    let mut agent = Agent::new(agent_config, &config, Arc::clone(&memory)).await?;
     agent.extend_tools(crate::tools::create_cli_tools(&config)?);
+    agent.extend_tools(vec![create_spawn_agent_tool(config.clone(), memory)]);
     agent.new_session().await?;
 
     // Send ready message

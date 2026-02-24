@@ -1,7 +1,8 @@
 use anyhow::Result;
 use clap::Args;
+use std::sync::Arc;
 
-use localgpt_core::agent::{Agent, AgentConfig};
+use localgpt_core::agent::{Agent, AgentConfig, create_spawn_agent_tool};
 use localgpt_core::concurrency::WorkspaceLock;
 use localgpt_core::config::Config;
 use localgpt_core::memory::MemoryManager;
@@ -22,7 +23,11 @@ pub struct AskArgs {
 
 pub async fn run(args: AskArgs, agent_id: &str) -> Result<()> {
     let config = Config::load()?;
-    let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), agent_id)?;
+    let memory = Arc::new(MemoryManager::new_with_full_config(
+        &config.memory,
+        Some(&config),
+        agent_id,
+    )?);
 
     let agent_config = AgentConfig {
         model: args.model.unwrap_or(config.agent.default_model.clone()),
@@ -30,8 +35,9 @@ pub async fn run(args: AskArgs, agent_id: &str) -> Result<()> {
         reserve_tokens: config.agent.reserve_tokens,
     };
 
-    let mut agent = Agent::new(agent_config, &config, memory).await?;
+    let mut agent = Agent::new(agent_config, &config, Arc::clone(&memory)).await?;
     agent.extend_tools(crate::tools::create_cli_tools(&config)?);
+    agent.extend_tools(vec![create_spawn_agent_tool(config.clone(), memory)]);
     agent.new_session().await?;
 
     let workspace_lock = WorkspaceLock::new()?;

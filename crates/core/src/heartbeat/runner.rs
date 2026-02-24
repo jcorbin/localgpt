@@ -4,14 +4,15 @@ use anyhow::Result;
 use chrono::{Local, NaiveTime};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::time::interval_at;
 use tracing::{debug, info, warn};
 
 use super::events::{HeartbeatEvent, HeartbeatStatus, emit_heartbeat_event, now_ms};
 use crate::agent::{
-    Agent, AgentConfig, HEARTBEAT_OK_TOKEN, SessionStore, build_heartbeat_prompt, is_heartbeat_ok,
-    tools::Tool,
+    Agent, AgentConfig, HEARTBEAT_OK_TOKEN, SessionStore, build_heartbeat_prompt,
+    create_spawn_agent_tool, is_heartbeat_ok, tools::Tool,
 };
 use crate::concurrency::{TurnGate, WorkspaceLock};
 use crate::config::{Config, parse_duration, parse_time};
@@ -395,13 +396,18 @@ impl HeartbeatRunner {
             reserve_tokens: self.config.agent.reserve_tokens,
         };
 
-        let mut agent = Agent::new(agent_config, &self.config, self.memory.clone()).await?;
+        // Wrap cloned memory in Arc for sharing with spawn_agent tool
+        let memory = Arc::new(self.memory.clone());
+        let mut agent = Agent::new(agent_config, &self.config, Arc::clone(&memory)).await?;
 
         // Extend agent with additional tools from factory if provided (e.g., CLI tools from daemon)
         if let Some(ref factory) = self.tool_factory {
             let extra_tools = factory(&self.config)?;
             agent.extend_tools(extra_tools);
         }
+
+        // Add spawn_agent tool for hierarchical delegation
+        agent.extend_tools(vec![create_spawn_agent_tool(self.config.clone(), memory)]);
 
         agent.new_session().await?;
 

@@ -82,11 +82,13 @@ impl LocalGPTClient {
             reserve_tokens: config.agent.reserve_tokens,
         };
 
-        let memory = MemoryManager::new_with_full_config(&config.memory, Some(&config), "mobile")
-            .map_err(|e| MobileError::Init(e.to_string()))?;
+        let memory = Arc::new(
+            MemoryManager::new_with_full_config(&config.memory, Some(&config), "mobile")
+                .map_err(|e| MobileError::Init(e.to_string()))?,
+        );
 
         let agent = rt
-            .block_on(Agent::new(agent_config, &config, memory))
+            .block_on(Agent::new(agent_config, &config, Arc::clone(&memory)))
             .map_err(|e| MobileError::Init(e.to_string()))?;
 
         let handle = AgentHandle::new(agent);

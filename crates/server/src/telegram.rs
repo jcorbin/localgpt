@@ -675,7 +675,8 @@ async fn handle_chat(
             reserve_tokens: state.config.agent.reserve_tokens,
         };
 
-        match Agent::new(agent_config, &state.config, state.memory.clone()).await {
+        let memory = std::sync::Arc::new(state.memory.clone());
+        match Agent::new(agent_config, &state.config, memory).await {
             Ok(mut agent) => {
                 // Extend agent with additional tools from factory if provided (e.g., CLI tools from daemon)
                 if let Some(ref factory) = state.tool_factory {

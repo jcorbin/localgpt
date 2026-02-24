@@ -141,8 +141,8 @@ async fn run_headless_control_loop(
     initial_prompt: Option<String>,
     config: localgpt_core::config::Config,
 ) -> Result<()> {
-    use localgpt_core::agent::Agent;
     use localgpt_core::agent::tools::create_safe_tools;
+    use localgpt_core::agent::{Agent, create_spawn_agent_tool};
     use localgpt_core::memory::MemoryManager;
     use rustyline::DefaultEditor;
     use rustyline::error::ReadlineError;
@@ -155,6 +155,10 @@ async fn run_headless_control_loop(
     // Create safe tools + avatar tools pointing to the external URL
     let mut tools = create_safe_tools(&config, Some(memory.clone()))?;
     tools.extend(crate::avatar_tools::create_avatar_tools());
+    tools.extend(vec![create_spawn_agent_tool(
+        config.clone(),
+        memory.clone(),
+    )]);
 
     // Create agent with combined tools
     let mut agent = Agent::new_with_tools(config.clone(), agent_id, memory, tools)?;
@@ -229,8 +233,8 @@ async fn run_agent_loop(
     initial_prompt: Option<String>,
     config: localgpt_core::config::Config,
 ) -> Result<()> {
-    use localgpt_core::agent::Agent;
     use localgpt_core::agent::tools::create_safe_tools;
+    use localgpt_core::agent::{Agent, create_spawn_agent_tool};
     use localgpt_core::memory::MemoryManager;
     use rustyline::DefaultEditor;
     use rustyline::error::ReadlineError;
@@ -243,6 +247,10 @@ async fn run_agent_loop(
     // Create safe tools + gen tools
     let mut tools = create_safe_tools(&config, Some(memory.clone()))?;
     tools.extend(gen3d::tools::create_gen_tools(bridge));
+    tools.extend(vec![create_spawn_agent_tool(
+        config.clone(),
+        memory.clone(),
+    )]);
 
     // Create agent with combined tools
     let mut agent = Agent::new_with_tools(config.clone(), agent_id, memory, tools)?;

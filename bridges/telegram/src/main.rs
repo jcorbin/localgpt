@@ -509,7 +509,7 @@ async fn handle_chat(
             reserve_tokens: state.config.agent.reserve_tokens,
         };
 
-        match Agent::new(agent_config, &state.config, state.memory.clone()).await {
+        match Agent::new(agent_config, &state.config, Arc::new(state.memory.clone())).await {
             Ok(mut agent) => {
                 if let Err(err) = agent.new_session().await {
                     let _ = bot
