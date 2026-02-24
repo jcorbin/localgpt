@@ -49,6 +49,12 @@ pub struct Config {
 
     #[serde(default)]
     pub telegram: Option<TelegramConfig>,
+
+    #[serde(default)]
+    pub cron: CronConfig,
+
+    #[serde(default)]
+    pub mcp: McpConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -653,6 +659,23 @@ pub struct ServerConfig {
     /// If unset, auth is disabled (backward compatible for local-only use).
     #[serde(default)]
     pub auth_token: Option<String>,
+
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum requests per minute per IP
+    #[serde(default = "default_requests_per_minute")]
+    pub requests_per_minute: u32,
+
+    /// Burst allowance (extra requests above steady rate)
+    #[serde(default = "default_burst")]
+    pub burst: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -674,6 +697,68 @@ pub struct TelegramConfig {
     pub enabled: bool,
 
     pub api_token: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CronConfig {
+    #[serde(default)]
+    pub jobs: Vec<CronJob>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronJob {
+    pub name: String,
+
+    /// Cron expression ("0 */6 * * *") or interval ("every 30m", "every 2h", "every 1d")
+    pub schedule: String,
+
+    /// Prompt to send to a fresh agent session
+    pub prompt: String,
+
+    /// Optional Telegram channel/chat to route output to
+    #[serde(default)]
+    pub channel: Option<String>,
+
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Timeout for the job (e.g., "5m", "1h"). Default: 10m
+    #[serde(default = "default_cron_timeout")]
+    pub timeout: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct McpConfig {
+    #[serde(default)]
+    pub servers: Vec<McpServerConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    /// Unique name for this MCP server (used in tool namespacing)
+    pub name: String,
+
+    /// Transport type: "stdio" or "sse"
+    #[serde(default = "default_mcp_transport")]
+    pub transport: String,
+
+    /// Command to run for stdio transport
+    pub command: Option<String>,
+
+    /// Arguments for the stdio command
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Environment variables for the subprocess
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+
+    /// URL for SSE transport
+    pub url: Option<String>,
+}
+
+fn default_mcp_transport() -> String {
+    "stdio".to_string()
 }
 
 // Default value functions
@@ -781,6 +866,15 @@ fn default_session_max_messages() -> usize {
 fn default_port() -> u16 {
     31327
 }
+fn default_cron_timeout() -> String {
+    "10m".to_string()
+}
+fn default_requests_per_minute() -> u32 {
+    60
+}
+fn default_burst() -> u32 {
+    10
+}
 fn default_bind() -> String {
     "127.0.0.1".to_string()
 }
@@ -887,6 +981,17 @@ impl Default for ServerConfig {
             port: default_port(),
             bind: default_bind(),
             auth_token: None,
+            rate_limit: RateLimitConfig::default(),
+        }
+    }
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            requests_per_minute: default_requests_per_minute(),
+            burst: default_burst(),
         }
     }
 }

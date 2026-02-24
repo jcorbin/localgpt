@@ -56,22 +56,24 @@ pub struct Server {
     turn_gate: TurnGate,
 }
 
-struct SessionEntry {
+pub(crate) struct SessionEntry {
     agent: Agent,
     last_accessed: Instant,
     /// Whether session has unsaved changes
     dirty: bool,
 }
 
-struct AppState {
-    config: Config,
-    sessions: Mutex<HashMap<String, SessionEntry>>,
+pub(crate) struct AppState {
+    pub(crate) config: Config,
+    pub(crate) sessions: Mutex<HashMap<String, SessionEntry>>,
     /// Shared MemoryManager to avoid reinitializing embedding provider
-    memory: MemoryManager,
+    pub(crate) memory: MemoryManager,
     /// In-process turn gate shared with heartbeat runner
     turn_gate: TurnGate,
     /// Cross-process workspace lock
     workspace_lock: WorkspaceLock,
+    /// Per-IP rate limiter
+    rate_limiter: Arc<crate::rate_limiter::RateLimiter>,
 }
 
 impl Server {
@@ -97,6 +99,7 @@ impl Server {
             MemoryManager::new_with_full_config(&self.config.memory, Some(&self.config), "main")?;
 
         let workspace_lock = WorkspaceLock::new()?;
+        let rate_limiter = crate::rate_limiter::create_rate_limiter(&self.config.server.rate_limit);
 
         let state = Arc::new(AppState {
             config: self.config.clone(),
@@ -104,6 +107,7 @@ impl Server {
             memory,
             turn_gate: self.turn_gate.clone(),
             workspace_lock,
+            rate_limiter,
         });
 
         // Load persisted sessions on startup
@@ -143,6 +147,22 @@ impl Server {
             .route("/health", get(health_check))
             .route("/api/auth/status", get(auth_status));
 
+        // OpenAI-compatible API routes (auth required if token configured)
+        let openai_routes = Router::new()
+            .route(
+                "/v1/chat/completions",
+                post(crate::openai_compat::chat_completions),
+            )
+            .route("/v1/models", get(crate::openai_compat::list_models))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                rate_limit_middleware,
+            ))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            ));
+
         // Protected API routes (auth required if token configured)
         let api_routes = Router::new()
             .route("/api/sessions", post(create_session))
@@ -170,11 +190,16 @@ impl Server {
             .route("/api/logs/daemon", get(get_daemon_logs))
             .layer(middleware::from_fn_with_state(
                 state.clone(),
+                rate_limit_middleware,
+            ))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
                 auth_middleware,
             ));
 
         let app = public_routes
             .merge(api_routes)
+            .merge(openai_routes)
             .layer(cors)
             .with_state(state);
 
@@ -230,6 +255,30 @@ async fn auth_middleware(
             Err(StatusCode::UNAUTHORIZED)
         }
     }
+}
+
+// Rate limit middleware for API routes
+async fn rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    request: Request,
+    next: Next,
+) -> Result<Response, Response> {
+    let ip = request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<SocketAddr>>()
+        .map(|ci| ci.0.ip())
+        .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+
+    if !state.rate_limiter.check(ip).await {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, "60")],
+            "Rate limit exceeded",
+        )
+            .into_response());
+    }
+
+    Ok(next.run(request).await)
 }
 
 // Auth status endpoint (public, tells client if auth is required)

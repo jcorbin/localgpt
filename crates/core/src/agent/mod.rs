@@ -187,7 +187,24 @@ impl Agent {
         };
 
         // Memory is already wrapped in Arc, create safe tools sharing it
-        let tools = tools::create_safe_tools(app_config, Some(Arc::clone(&memory)))?;
+        let mut tools = tools::create_safe_tools(app_config, Some(Arc::clone(&memory)))?;
+
+        // Connect to MCP servers and discover tools
+        if !app_config.mcp.servers.is_empty() {
+            match crate::mcp::McpManager::connect_all(&app_config.mcp.servers).await {
+                Ok((_manager, mcp_tools)) => {
+                    info!(
+                        "MCP: {} tools discovered from {} server(s)",
+                        mcp_tools.len(),
+                        app_config.mcp.servers.len()
+                    );
+                    tools.extend(mcp_tools);
+                }
+                Err(e) => {
+                    tracing::warn!("MCP initialization failed: {}", e);
+                }
+            }
+        }
 
         // Load and verify security policy
         let workspace = app_config.workspace_path();
@@ -706,6 +723,149 @@ impl Agent {
         });
 
         Ok(final_response)
+    }
+
+    /// Stateless chat with provided messages (for OpenAI API compatibility)
+    ///
+    /// This method takes a list of messages directly and does NOT modify the session.
+    /// Used by the OpenAI-compatible HTTP API for stateless requests.
+    /// Tool calls are executed if the model returns them.
+    pub async fn chat_with_messages(
+        &mut self,
+        messages: &[Message],
+        tools: Option<&[ToolSchema]>,
+    ) -> Result<LLMResponse> {
+        // Reset loop detector for this call
+        self.loop_detector.reset();
+
+        // Build messages with system prompt prepended if needed
+        let mut api_messages = Vec::new();
+
+        // Check if messages already start with a system prompt
+        let has_system = messages
+            .first()
+            .map(|m| m.role == Role::System)
+            .unwrap_or(false);
+
+        // Add system prompt if not provided by client
+        if !has_system {
+            // Build a minimal system prompt for OpenAI API
+            let tool_names = self.tool_names_for_provider();
+            let system_prompt_params =
+                system_prompt::SystemPromptParams::new(self.memory.workspace(), &self.config.model)
+                    .with_tools(tool_names);
+            let system_prompt = system_prompt::build_system_prompt(system_prompt_params);
+
+            api_messages.push(Message {
+                role: Role::System,
+                content: system_prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                images: Vec::new(),
+            });
+        }
+
+        // Add provided messages
+        api_messages.extend(messages.iter().cloned());
+
+        // If no tools provided, use the agent's default tools
+        let tool_schemas: Vec<ToolSchema> = match tools {
+            Some(t) => t.to_vec(),
+            None => self.tool_schemas_for_provider(),
+        };
+
+        // Invoke LLM
+        let response = self
+            .provider
+            .chat(&api_messages, Some(tool_schemas.as_slice()))
+            .await?;
+
+        // Handle token update if refreshed during chat
+        let _ = self.handle_token_update();
+
+        // Handle tool calls recursively
+        self.handle_response_stateless(response, &api_messages, &tool_schemas)
+            .await
+    }
+
+    /// Handle LLM response for stateless chat (OpenAI API)
+    async fn handle_response_stateless(
+        &mut self,
+        response: LLMResponse,
+        messages: &[Message],
+        tool_schemas: &[ToolSchema],
+    ) -> Result<LLMResponse> {
+        // Track usage
+        self.add_usage(response.usage.clone());
+
+        match response.content {
+            LLMResponseContent::Text(_) => Ok(response),
+            LLMResponseContent::ToolCalls(calls) => {
+                // Build new messages with tool results
+                let mut updated_messages = messages.to_vec();
+
+                // Add assistant message with tool calls
+                updated_messages.push(Message {
+                    role: Role::Assistant,
+                    content: String::new(),
+                    tool_calls: Some(calls.clone()),
+                    tool_call_id: None,
+                    images: Vec::new(),
+                });
+
+                // Execute each tool call and add results
+                for call in &calls {
+                    debug!(
+                        "Executing tool: {} with args: {}",
+                        call.name, call.arguments
+                    );
+
+                    // Check for stuck loop
+                    self.loop_detector.record(&call.name, &call.arguments);
+                    if self.loop_detector.is_stuck() {
+                        let tool_name = self.loop_detector.last_tool_name().unwrap_or("unknown");
+                        tracing::warn!(
+                            "Stuck loop detected: {} called {} times with same args",
+                            tool_name,
+                            self.loop_detector.max_repeats
+                        );
+                        // Return error response
+                        return Ok(LLMResponse::text(format!(
+                            "Error: Tool '{}' called in a loop. Please try a different approach.",
+                            tool_name
+                        )));
+                    }
+
+                    let result = self.execute_tool(call).await;
+                    let output = match result {
+                        Ok((content, _warnings)) => content,
+                        Err(e) => format!("Error: {}", e),
+                    };
+
+                    updated_messages.push(Message {
+                        role: Role::Tool,
+                        content: output,
+                        tool_calls: None,
+                        tool_call_id: Some(call.id.clone()),
+                        images: Vec::new(),
+                    });
+                }
+
+                // Continue conversation with tool results
+                let next_response = self
+                    .provider
+                    .chat(&updated_messages, Some(tool_schemas))
+                    .await?;
+
+                // Recursively handle (in case of more tool calls)
+                Box::pin(self.handle_response_stateless(
+                    next_response,
+                    &updated_messages,
+                    tool_schemas,
+                ))
+                .await
+            }
+        }
     }
 
     async fn handle_response(&mut self, response: LLMResponse) -> Result<String> {

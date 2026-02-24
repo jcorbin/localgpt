@@ -52,6 +52,9 @@ fastembed = { version = "5.11", optional = true }
 # GGUF embeddings via llama.cpp (optional)
 llama-cpp-2 = { version = "0.1", optional = true }
 
+# Cron expression parsing
+croner = "2"
+
 # Config
 json5 = "1.3"
 

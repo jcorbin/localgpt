@@ -221,6 +221,29 @@ async fn run_daemon_services(config: &Config, agent_id: &str) -> Result<()> {
         println!("  Telegram: disabled");
     }
 
+    // Spawn cron scheduler if any jobs are configured
+    if !config.cron.jobs.is_empty() {
+        let cron_config = config.clone();
+        let scheduler = localgpt_core::cron::CronScheduler::new(&config.cron.jobs);
+        let job_count = config.cron.jobs.iter().filter(|j| j.enabled).count();
+        println!("  Cron: {} job(s) scheduled", job_count);
+        handles.spawn(async move {
+            // Create tool factory that provides CLI tools to cron jobs
+            let tool_factory: localgpt_core::cron::ToolFactory =
+                Box::new(|config: &localgpt_core::config::Config| {
+                    crate::tools::create_cli_tools(config).unwrap_or_default()
+                });
+
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                scheduler.tick(&cron_config, Some(&tool_factory)).await;
+            }
+        });
+    } else {
+        println!("  Cron: no jobs configured");
+    }
+
     if config.server.enabled {
         // Spawn Server
         let server_config = config.clone();
