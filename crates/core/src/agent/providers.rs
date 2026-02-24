@@ -944,7 +944,11 @@ impl LLMProvider for OpenAICompatibleProvider {
 
         // Check for errors
         if let Some(error) = response_body.get("error") {
-            anyhow::bail!("OpenAI-Compatible API error from {}: {}", self.base_url, error);
+            anyhow::bail!(
+                "OpenAI-Compatible API error from {}: {}",
+                self.base_url,
+                error
+            );
         }
 
         let choice = response_body["choices"]

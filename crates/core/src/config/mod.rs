@@ -76,6 +76,12 @@ pub struct AgentConfig {
     /// Model to use for spawned subagents (default: same as default_model or claude-cli/sonnet)
     #[serde(default)]
     pub subagent_model: Option<String>,
+
+    /// Fallback models to try if primary provider fails with retryable errors
+    /// (rate limits, server errors, timeouts). Providers are tried in order.
+    /// Example: ["openai/gpt-4o", "ollama/llama3"]
+    #[serde(default)]
+    pub fallback_models: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -808,6 +814,7 @@ impl Default for AgentConfig {
             max_tokens: default_max_tokens(),
             max_spawn_depth: Some(1), // Single-level spawning by default
             subagent_model: None,     // Use default_model if not specified
+            fallback_models: Vec::new(), // No fallbacks by default
         }
     }
 }
@@ -1192,6 +1199,11 @@ reserve_tokens = 8000
 # Spawn agent (subagent) configuration
 # max_spawn_depth = 1            # 0 = disabled, 1 = single level (default)
 # subagent_model = "claude-cli/sonnet"  # Model for subagents (default: same as default_model)
+
+# Failover configuration (optional)
+# Automatically try fallback models if primary fails with retryable errors
+# (rate limits, server errors, timeouts). Providers tried in order.
+# fallback_models = ["openai/gpt-4o", "ollama/llama3"]
 
 # Anthropic API (for anthropic/* models)
 # [providers.anthropic]
