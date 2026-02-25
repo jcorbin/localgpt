@@ -4,16 +4,54 @@ All notable changes to LocalGPT are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-24
+
+A major release bringing the agent platform to production readiness with MCP tool integration, OpenAI-compatible API, cron scheduling, security hardening, mobile apps, and multi-agent orchestration.
+
 ### Added
 
-- **Hybrid web search support** with configurable providers (`searxng`, `brave`, `tavily`, `perplexity`) and native-search passthrough controls.
+- **MCP client support** — connect to external MCP tool servers via stdio or HTTP/SSE transports. Tools are auto-discovered and namespaced as `mcp_{server}_{tool}`. Configure in `[mcp]` config section.
+- **OpenAI-compatible HTTP API** — `/v1/chat/completions` (streaming + non-streaming) and `/v1/models` endpoints. Enables integration with Cursor, Continue, Open WebUI, and the Python `openai` library.
+- **Cron job scheduling** — run prompts on cron expressions (`0 */6 * * *`) or simple intervals (`every 30m`). Each job gets a fresh agent session with overlap prevention and configurable timeout.
+- **Per-IP rate limiting** — token bucket rate limiter on all API routes. Configurable `requests_per_minute` and `burst` in `[server.rate_limit]`.
+- **Oversized payload guard** — `RequestBodyLimitLayer` prevents OOM from large POST bodies (default: 10MB, configurable via `server.max_request_body`).
+- **Configuration hot-reload** — daemon watches `config.toml` for changes and propagates updates to running services without restart. Also responds to SIGHUP on Unix.
+- **Session pruning** — auto-cleanup of old session files at daemon startup and hourly. Configurable `session_max_age` (default: 30 days) and `session_max_count` (default: 500).
+- **`localgpt doctor` command** — diagnostics that validate config, check provider reachability, test memory database, verify MCP connections, and report disk space. Supports `--fix` and `--json` flags.
+- **Multi-agent orchestration** with `spawn_agent` tool for hierarchical delegation to specialist subagents.
+- **OpenAI-compatible provider** for third-party APIs (OpenRouter, DeepSeek, Groq, vLLM, LiteLLM).
+- **Multi-provider failover** with automatic retry across configured fallback models.
+- **Lifecycle hook system** — `beforeToolCall`, `onMessage`, `onSessionStart` extensibility points.
+- **Stuck loop detection** — prevents infinite tool-call loops by detecting repeated identical calls (configurable `max_tool_repeats`).
+- **Bearer token authentication** for all HTTP API routes via `server.auth_token`.
+- **Session file permissions** hardened to `0o600`.
+- **Codex CLI provider** integration (`codex/*` models).
+- **Apple Foundation Models** integration for on-device AI on iOS.
+- **iOS app** with SwiftUI, MVVM architecture, and UniFFI bindings.
+- **Android app** initial project structure.
+- **Profile isolation** via `-p/--profile` CLI option for complete XDG path separation.
+- **Hybrid web search** with configurable providers (`searxng`, `brave`, `tavily`, `perplexity`) and native-search passthrough.
 - **xAI provider support** (`xai/*`, `grok-*`) with native `web_search` tool passthrough.
-- **Web search docs and CLI surfaces**: `localgpt search test`, `localgpt search stats`, and a dedicated `docs/web-search.md` guide.
 
 ### Changed
 
+- **Actor-based agent execution** with `Arc<MemoryManager>` for improved thread safety.
 - **`web_fetch` extraction upgraded** to use the `readability` crate with fallback text sanitization.
-- **Config templates expanded** with `providers.xai` and full `[tools.web_search]` examples in both default and example config files.
+- **BridgeManager moved** from core to server crate for cleaner dependency graph.
+- **Model routing updated** to support Claude 4.6 models.
+- Replaced unsafe string byte-slicing with `floor_char_boundary` to prevent UTF-8 panics.
+- Config templates expanded with `providers.xai`, `[tools.web_search]`, `[cron]`, and `[mcp]` examples.
+
+### Fixed
+
+- Mobile init EPERM by passing Config to MemoryManager.
+- iOS XCFramework library identifiers, actor isolation, and C++ linking.
+- Silent `NO_REPLY` tokens filtered from user-facing chat responses.
+- Daemon foreground mode logging level.
+
+### Contributors
+
+Thanks to all contributors who helped shape this release! Special thanks to **[@jcorbin](https://github.com/jcorbin)** for generalizing daemon process handles, improving heartbeat reliability, incremental session saves, provider tooling improvements, and web search summaries; **[@TranscriptionFactory](https://github.com/TranscriptionFactory)** for tool filter infrastructure.
 
 ## [0.2.0] - 2026-02-14
 
@@ -127,7 +165,8 @@ Initial release of LocalGPT — a local-only AI assistant with persistent markdo
 - **Zero-config startup** defaulting to `claude-cli/opus`.
 - **Auto-migration** from OpenClaw config if present.
 
-[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/localgpt-app/localgpt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/localgpt-app/localgpt/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/localgpt-app/localgpt/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/localgpt-app/localgpt/compare/v0.1.1...v0.1.2

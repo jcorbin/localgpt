@@ -24,6 +24,7 @@ homepage = "https://localgpt.app"
 [workspace.metadata.release]
 shared-version = true
 tag-name = "v{{version}}"
+rate-limit.new-packages = 10
 
 [workspace.dependencies]
 # Async runtime
