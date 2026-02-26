@@ -195,6 +195,12 @@ async fn handle_message(bot: Bot, msg: Message, state: Arc<BotState>) -> Respons
     };
     let user_id = user.id.0;
 
+    // Skip self-messages to prevent infinite loops in groups
+    if user.id == state.bot_info.id {
+        debug!("Skipping self-message from bot");
+        return Ok(());
+    }
+
     // Check pairing
     {
         let paired = state.paired_user.lock().await;
