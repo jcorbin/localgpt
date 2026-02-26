@@ -12,6 +12,7 @@ use serde::Serialize;
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tarpc::context;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
@@ -26,6 +27,18 @@ use localgpt_core::security::read_device_key;
 /// Agent ID used for bridge CLI sessions.
 const BRIDGE_CLI_AGENT_ID: &str = "bridge-cli";
 
+/// Health status of a bridge connection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthStatus {
+    /// Bridge is actively communicating
+    Healthy,
+    /// Bridge hasn't been seen recently (warning)
+    Degraded,
+    /// Bridge is unresponsive (critical)
+    Unhealthy,
+}
+
 /// Status and health info for a connected bridge.
 #[derive(Debug, Clone, Serialize)]
 pub struct BridgeStatus {
@@ -35,6 +48,34 @@ pub struct BridgeStatus {
     pub last_active: DateTime<Utc>,
     pub pid: Option<i32>,
     pub uid: Option<u32>,
+    /// Current health status based on last_active time
+    pub health: HealthStatus,
+    /// Number of consecutive health check failures
+    pub consecutive_failures: u32,
+}
+
+/// Configuration for bridge health monitoring
+#[derive(Debug, Clone)]
+pub struct HealthCheckConfig {
+    /// How often to check bridge health (default: 30s)
+    pub check_interval: Duration,
+    /// Time without activity before marking as degraded (default: 60s)
+    pub degraded_threshold: Duration,
+    /// Time without activity before marking as unhealthy (default: 120s)
+    pub unhealthy_threshold: Duration,
+    /// Whether to log warnings for unhealthy bridges
+    pub log_warnings: bool,
+}
+
+impl Default for HealthCheckConfig {
+    fn default() -> Self {
+        Self {
+            check_interval: Duration::from_secs(30),
+            degraded_threshold: Duration::from_secs(60),
+            unhealthy_threshold: Duration::from_secs(120),
+            log_warnings: true,
+        }
+    }
 }
 
 /// Shared agent session for bridge CLI connections.
@@ -58,6 +99,8 @@ pub struct BridgeManager {
     active_bridges: Arc<RwLock<HashMap<String, BridgeStatus>>>,
     // Optional agent support for CLI bridge
     agent_support: Option<Arc<AgentSupport>>,
+    // Health check configuration
+    health_config: HealthCheckConfig,
 }
 
 impl BridgeManager {
@@ -66,6 +109,7 @@ impl BridgeManager {
             credentials: Arc::new(RwLock::new(HashMap::new())),
             active_bridges: Arc::new(RwLock::new(HashMap::new())),
             agent_support: None,
+            health_config: HealthCheckConfig::default(),
         }
     }
 
@@ -80,6 +124,101 @@ impl BridgeManager {
                 memory: Arc::new(memory),
                 sessions: tokio::sync::Mutex::new(HashMap::new()),
             })),
+            health_config: HealthCheckConfig::default(),
+        }
+    }
+
+    /// Create with custom health check configuration
+    pub fn with_health_config(config: HealthCheckConfig) -> Self {
+        Self {
+            credentials: Arc::new(RwLock::new(HashMap::new())),
+            active_bridges: Arc::new(RwLock::new(HashMap::new())),
+            agent_support: None,
+            health_config: config,
+        }
+    }
+
+    /// Start the background health check task
+    pub fn start_health_checker(&self) -> tokio::task::JoinHandle<()> {
+        let manager = self.clone();
+        let interval = self.health_config.check_interval;
+
+        tokio::spawn(async move {
+            let mut timer = tokio::time::interval(interval);
+            loop {
+                timer.tick().await;
+                manager.check_bridge_health().await;
+            }
+        })
+    }
+
+    /// Check health of all bridges and update their status
+    async fn check_bridge_health(&self) {
+        let now = Utc::now();
+        let config = &self.health_config;
+        let mut bridges = self.active_bridges.write().await;
+
+        for (_id, status) in bridges.iter_mut() {
+            let elapsed = (now - status.last_active)
+                .to_std()
+                .unwrap_or(Duration::ZERO);
+
+            let previous_health = status.health;
+            let previous_failures = status.consecutive_failures;
+
+            // Determine health based on elapsed time since last activity
+            if elapsed > config.unhealthy_threshold {
+                status.health = HealthStatus::Unhealthy;
+                status.consecutive_failures += 1;
+            } else if elapsed > config.degraded_threshold {
+                status.health = HealthStatus::Degraded;
+                status.consecutive_failures += 1;
+            } else {
+                status.health = HealthStatus::Healthy;
+                status.consecutive_failures = 0;
+            }
+
+            // Log warnings on state changes or continued unhealthy state
+            if config.log_warnings {
+                if status.health != previous_health {
+                    match status.health {
+                        HealthStatus::Degraded => {
+                            warn!(
+                                "Bridge {} (connection {}) is degraded - no activity for {:?}",
+                                status.bridge_id.as_deref().unwrap_or("unknown"),
+                                status.connection_id,
+                                elapsed
+                            );
+                        }
+                        HealthStatus::Unhealthy => {
+                            error!(
+                                "Bridge {} (connection {}) is unhealthy - no activity for {:?}",
+                                status.bridge_id.as_deref().unwrap_or("unknown"),
+                                status.connection_id,
+                                elapsed
+                            );
+                        }
+                        HealthStatus::Healthy => {
+                            info!(
+                                "Bridge {} (connection {}) is now healthy",
+                                status.bridge_id.as_deref().unwrap_or("unknown"),
+                                status.connection_id
+                            );
+                        }
+                    }
+                } else if status.health == HealthStatus::Unhealthy
+                    && status.consecutive_failures > previous_failures
+                    && status.consecutive_failures % 3 == 0
+                {
+                    // Log every 3rd consecutive failure
+                    error!(
+                        "Bridge {} (connection {}) still unhealthy (failures: {})",
+                        status.bridge_id.as_deref().unwrap_or("unknown"),
+                        status.connection_id,
+                        status.consecutive_failures
+                    );
+                }
+            }
         }
     }
 
@@ -96,6 +235,8 @@ impl BridgeManager {
             last_active: Utc::now(),
             pid: identity.pid,
             uid: identity.uid,
+            health: HealthStatus::Healthy,
+            consecutive_failures: 0,
         };
         self.active_bridges
             .write()
@@ -107,6 +248,8 @@ impl BridgeManager {
         let mut active = self.active_bridges.write().await;
         if let Some(status) = active.get_mut(id) {
             status.last_active = Utc::now();
+            status.health = HealthStatus::Healthy;
+            status.consecutive_failures = 0;
             if bridge_id.is_some() {
                 status.bridge_id = bridge_id;
             }
@@ -662,4 +805,237 @@ fn validate_bridge_id(id: &str) -> Result<()> {
         anyhow::bail!("Bridge ID contains invalid characters. Allowed: a-z, A-Z, 0-9, -, _");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_health_status_serialization() {
+        let healthy = HealthStatus::Healthy;
+        assert_eq!(serde_json::to_string(&healthy).unwrap(), "\"healthy\"");
+
+        let degraded = HealthStatus::Degraded;
+        assert_eq!(serde_json::to_string(&degraded).unwrap(), "\"degraded\"");
+
+        let unhealthy = HealthStatus::Unhealthy;
+        assert_eq!(serde_json::to_string(&unhealthy).unwrap(), "\"unhealthy\"");
+    }
+
+    #[test]
+    fn test_health_check_config_default() {
+        let config = HealthCheckConfig::default();
+        assert_eq!(config.check_interval, Duration::from_secs(30));
+        assert_eq!(config.degraded_threshold, Duration::from_secs(60));
+        assert_eq!(config.unhealthy_threshold, Duration::from_secs(120));
+        assert!(config.log_warnings);
+    }
+
+    #[tokio::test]
+    async fn test_bridge_status_initial_health() {
+        let manager = BridgeManager::new();
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges.len(), 1);
+        assert_eq!(bridges[0].health, HealthStatus::Healthy);
+        assert_eq!(bridges[0].consecutive_failures, 0);
+    }
+
+    #[tokio::test]
+    async fn test_update_active_resets_health() {
+        let manager = BridgeManager::new();
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        // Simulate bridge going unhealthy
+        {
+            let mut bridges = manager.active_bridges.write().await;
+            let status = bridges.get_mut("test-conn").unwrap();
+            status.health = HealthStatus::Unhealthy;
+            status.consecutive_failures = 5;
+        }
+
+        // Update active should reset health
+        manager.update_active("test-conn", Some("telegram".to_string())).await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges[0].health, HealthStatus::Healthy);
+        assert_eq!(bridges[0].consecutive_failures, 0);
+        assert_eq!(bridges[0].bridge_id, Some("telegram".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_health_check_degraded() {
+        let config = HealthCheckConfig {
+            check_interval: Duration::from_secs(30),
+            degraded_threshold: Duration::from_secs(5),
+            unhealthy_threshold: Duration::from_secs(10),
+            log_warnings: false,
+        };
+        let manager = BridgeManager::with_health_config(config);
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        // Simulate time passing by setting last_active to the past
+        {
+            let mut bridges = manager.active_bridges.write().await;
+            let status = bridges.get_mut("test-conn").unwrap();
+            // Set last_active to 7 seconds ago (past degraded threshold of 5s)
+            status.last_active = Utc::now() - chrono::Duration::seconds(7);
+        }
+
+        // Run health check
+        manager.check_bridge_health().await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges[0].health, HealthStatus::Degraded);
+        assert_eq!(bridges[0].consecutive_failures, 1);
+    }
+
+    #[tokio::test]
+    async fn test_health_check_unhealthy() {
+        let config = HealthCheckConfig {
+            check_interval: Duration::from_secs(30),
+            degraded_threshold: Duration::from_secs(5),
+            unhealthy_threshold: Duration::from_secs(10),
+            log_warnings: false,
+        };
+        let manager = BridgeManager::with_health_config(config);
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        // Simulate time passing by setting last_active to the past
+        {
+            let mut bridges = manager.active_bridges.write().await;
+            let status = bridges.get_mut("test-conn").unwrap();
+            // Set last_active to 15 seconds ago (past unhealthy threshold of 10s)
+            status.last_active = Utc::now() - chrono::Duration::seconds(15);
+        }
+
+        // Run health check
+        manager.check_bridge_health().await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges[0].health, HealthStatus::Unhealthy);
+        assert_eq!(bridges[0].consecutive_failures, 1);
+    }
+
+    #[tokio::test]
+    async fn test_health_check_consecutive_failures() {
+        let config = HealthCheckConfig {
+            check_interval: Duration::from_secs(30),
+            degraded_threshold: Duration::from_secs(5),
+            unhealthy_threshold: Duration::from_secs(10),
+            log_warnings: false,
+        };
+        let manager = BridgeManager::with_health_config(config);
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        // Simulate bridge that stays unhealthy
+        {
+            let mut bridges = manager.active_bridges.write().await;
+            let status = bridges.get_mut("test-conn").unwrap();
+            status.last_active = Utc::now() - chrono::Duration::seconds(15);
+        }
+
+        // Run health check 3 times
+        manager.check_bridge_health().await;
+        manager.check_bridge_health().await;
+        manager.check_bridge_health().await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges[0].consecutive_failures, 3);
+    }
+
+    #[tokio::test]
+    async fn test_health_check_healthy_resets_failures() {
+        let config = HealthCheckConfig {
+            check_interval: Duration::from_secs(30),
+            degraded_threshold: Duration::from_secs(5),
+            unhealthy_threshold: Duration::from_secs(10),
+            log_warnings: false,
+        };
+        let manager = BridgeManager::with_health_config(config);
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+
+        // Start with some failures
+        {
+            let mut bridges = manager.active_bridges.write().await;
+            let status = bridges.get_mut("test-conn").unwrap();
+            status.consecutive_failures = 5;
+            status.health = HealthStatus::Unhealthy;
+        }
+
+        // Bridge becomes active again (last_active is now)
+        // Run health check - should reset to healthy
+        manager.check_bridge_health().await;
+
+        let bridges = manager.get_active_bridges().await;
+        assert_eq!(bridges[0].health, HealthStatus::Healthy);
+        assert_eq!(bridges[0].consecutive_failures, 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_connection() {
+        let manager = BridgeManager::new();
+        let identity = PeerIdentity {
+            pid: Some(1234),
+            uid: Some(1000),
+            gid: Some(1000),
+        };
+
+        manager.add_connection("test-conn", &identity).await;
+        assert_eq!(manager.get_active_bridges().await.len(), 1);
+
+        manager.remove_connection("test-conn").await;
+        assert_eq!(manager.get_active_bridges().await.len(), 0);
+    }
+
+    #[test]
+    fn test_validate_bridge_id() {
+        assert!(validate_bridge_id("telegram").is_ok());
+        assert!(validate_bridge_id("discord-bot").is_ok());
+        assert!(validate_bridge_id("whatsapp_2").is_ok());
+        assert!(validate_bridge_id("bridge123").is_ok());
+
+        assert!(validate_bridge_id("").is_err());
+        assert!(validate_bridge_id(&"x".repeat(65)).is_err());
+        assert!(validate_bridge_id("bridge!@#").is_err());
+        assert!(validate_bridge_id("bridge name").is_err());
+    }
 }
