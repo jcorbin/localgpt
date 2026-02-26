@@ -1,5 +1,5 @@
 //! Security features for the server (bridge management).
 
-mod bridge;
+pub mod bridge;
 
-pub use bridge::BridgeManager;
+pub use bridge::{BridgeManager, BridgeStatus};

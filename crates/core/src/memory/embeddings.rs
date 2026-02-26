@@ -423,50 +423,10 @@ impl EmbeddingProvider for LlamaCppProvider {
     }
 
     async fn embed(&self, text: &str) -> Result<Vec<f32>> {
-        let text = text.to_string();
-        let model = Arc::clone(&self.model);
-        let backend = Arc::clone(&self.backend);
-        let model_name = self.model_name.clone();
-
-        // llama.cpp is synchronous, run in blocking task
-        tokio::task::spawn_blocking(move || {
-            use llama_cpp_2::context::params::LlamaContextParams;
-
-            let model_guard = model
-                .lock()
-                .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
-
-            // Create context for embedding
-            let ctx_params = LlamaContextParams::default()
-                .with_n_ctx(Some(std::num::NonZeroU32::new(512).unwrap()))
-                .with_embeddings(true);
-
-            let mut ctx = model_guard.new_context(&backend, ctx_params)?;
-
-            // Tokenize the input text
-            let tokens = model_guard.str_to_token(&text, llama_cpp_2::model::AddBos::Always)?;
-
-            // Create a batch with the tokens
-            let mut batch = llama_cpp_2::llama_batch::LlamaBatch::new(512, 1);
-            for (i, token) in tokens.iter().enumerate() {
-                batch.add(*token, i as i32, &[0], i == tokens.len() - 1)?;
-            }
-
-            // Decode to generate embeddings
-            ctx.decode(&mut batch)?;
-
-            // Get embeddings from context
-            let embeddings = ctx.embeddings_seq_ith(0)?;
-
-            debug!(
-                "Generated GGUF embedding with {} for text len {}",
-                model_name,
-                text.len()
-            );
-
-            Ok(normalize_embedding(embeddings.to_vec()))
-        })
-        .await?
+        let mut results = self.embed_batch(&[text.to_string()]).await?;
+        results
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("No embedding returned"))
     }
 
     async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
@@ -474,21 +434,105 @@ impl EmbeddingProvider for LlamaCppProvider {
             return Ok(Vec::new());
         }
 
-        debug!(
-            "Embedding {} texts with GGUF model {}",
-            texts.len(),
-            self.model_name
-        );
+        let texts = texts.to_vec();
+        let model = Arc::clone(&self.model);
+        let backend = Arc::clone(&self.backend);
+        let model_name = self.model_name.clone();
 
-        // Process texts one at a time (llama.cpp batch embedding is complex)
-        let mut results = Vec::with_capacity(texts.len());
-        for text in texts {
-            let embedding = self.embed(text).await?;
-            results.push(embedding);
-        }
+        // llama.cpp is synchronous, run in blocking task
+        tokio::task::spawn_blocking(move || {
+            use llama_cpp_2::context::params::LlamaContextParams;
+            use llama_cpp_2::llama_batch::LlamaBatch;
+            use llama_cpp_2::model::AddBos;
 
-        Ok(results)
+            let model_guard = model
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
+
+            let mut all_results = Vec::with_capacity(texts.len());
+
+            // Process in smaller sub-batches to avoid context window limits
+            // 512 is a safe default for many embedding models
+            const MAX_BATCH_TOKENS: usize = 2048;
+
+            let mut current_sub_batch = Vec::new();
+            let mut current_tokens_count = 0;
+
+            for text in texts {
+                let tokens = model_guard.str_to_token(&text, AddBos::Always)?;
+                if current_tokens_count + tokens.len() > MAX_BATCH_TOKENS
+                    && !current_sub_batch.is_empty()
+                {
+                    // Process current sub-batch
+                    let sub_results =
+                        process_sub_batch(&model_guard, &backend, &current_sub_batch)?;
+                    all_results.extend(sub_results);
+                    current_sub_batch.clear();
+                    current_tokens_count = 0;
+                }
+                current_tokens_count += tokens.len();
+                current_sub_batch.push(tokens);
+            }
+
+            // Process final sub-batch
+            if !current_sub_batch.is_empty() {
+                let sub_results = process_sub_batch(&model_guard, &backend, &current_sub_batch)?;
+                all_results.extend(sub_results);
+            }
+
+            debug!(
+                "Generated {} GGUF embeddings with {}",
+                all_results.len(),
+                model_name
+            );
+
+            Ok(all_results)
+        })
+        .await?
     }
+}
+
+#[cfg(feature = "gguf")]
+fn process_sub_batch(
+    model: &llama_cpp_2::model::LlamaModel,
+    backend: &llama_cpp_2::llama_backend::LlamaBackend,
+    sub_batch_tokens: &[Vec<llama_cpp_2::token::LlamaToken>],
+) -> Result<Vec<Vec<f32>>> {
+    use llama_cpp_2::context::params::LlamaContextParams;
+    use llama_cpp_2::llama_batch::LlamaBatch;
+
+    let total_tokens: usize = sub_batch_tokens.iter().map(|v| v.len()).sum();
+    let batch_len = sub_batch_tokens.len();
+
+    // Create context for this sub-batch
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(
+            std::num::NonZeroU32::new((total_tokens + batch_len) as u32).unwrap(),
+        ))
+        .with_embeddings(true);
+
+    let mut ctx = model.new_context(backend, ctx_params)?;
+
+    // Create a batch with all tokens
+    let mut batch = LlamaBatch::new(total_tokens as u32, batch_len as i32);
+    for (seq_id, tokens) in sub_batch_tokens.iter().enumerate() {
+        for (i, token) in tokens.iter().enumerate() {
+            let is_last = i == tokens.len() - 1;
+            batch.add(*token, i as i32, &[seq_id as i32], is_last)?;
+        }
+    }
+
+    // Decode to generate embeddings
+    ctx.decode(&mut batch)?;
+
+    // Get embeddings from context
+    let mut results = Vec::with_capacity(batch_len);
+    for i in 0..batch_len {
+        let embeddings = ctx.embeddings_seq_ith(i as i32)?;
+        results.push(normalize_embedding(embeddings.to_vec()));
+    }
+
+    Ok(results)
 }
 
 /// Compute cosine similarity between two normalized vectors

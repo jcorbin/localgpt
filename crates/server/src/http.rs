@@ -55,6 +55,7 @@ const HTTP_AGENT_ID: &str = "http";
 pub struct Server {
     config: Config,
     turn_gate: TurnGate,
+    bridge_manager: crate::security::BridgeManager,
 }
 
 pub(crate) struct SessionEntry {
@@ -75,6 +76,8 @@ pub(crate) struct AppState {
     workspace_lock: WorkspaceLock,
     /// Per-IP rate limiter
     rate_limiter: Arc<crate::rate_limiter::RateLimiter>,
+    /// Bridge manager for tracking active connections
+    pub(crate) bridge_manager: crate::security::BridgeManager,
 }
 
 impl Server {
@@ -82,6 +85,7 @@ impl Server {
         Ok(Self {
             config: config.clone(),
             turn_gate: TurnGate::new(),
+            bridge_manager: crate::security::BridgeManager::new(),
         })
     }
 
@@ -91,6 +95,20 @@ impl Server {
         Ok(Self {
             config: config.clone(),
             turn_gate,
+            bridge_manager: crate::security::BridgeManager::new(),
+        })
+    }
+
+    /// Create a server with both a shared TurnGate and a shared BridgeManager.
+    pub fn new_daemon(
+        config: &Config,
+        turn_gate: TurnGate,
+        bridge_manager: crate::security::BridgeManager,
+    ) -> Result<Self> {
+        Ok(Self {
+            config: config.clone(),
+            turn_gate,
+            bridge_manager,
         })
     }
 
@@ -109,6 +127,7 @@ impl Server {
             turn_gate: self.turn_gate.clone(),
             workspace_lock,
             rate_limiter,
+            bridge_manager: self.bridge_manager.clone(),
         });
 
         // Load persisted sessions on startup
@@ -186,6 +205,7 @@ impl Server {
             .route("/api/status", get(status))
             .route("/api/config", get(get_config))
             .route("/api/heartbeat/status", get(heartbeat_status))
+            .route("/api/bridges", get(list_bridges))
             .route("/api/saved-sessions", get(list_saved_sessions))
             .route("/api/saved-sessions/{session_id}", get(get_saved_session))
             .route("/api/logs/daemon", get(get_daemon_logs))
@@ -493,6 +513,12 @@ async fn status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> {
         active_sessions: sessions.len(),
         is_brand_new: state.memory.is_brand_new(),
     })
+}
+
+async fn list_bridges(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<crate::security::bridge::BridgeStatus>> {
+    Json(state.bridge_manager.get_active_bridges().await)
 }
 
 // Session management endpoints

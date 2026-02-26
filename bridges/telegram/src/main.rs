@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tarpc::context;
 use teloxide::prelude::*;
-use teloxide::types::{MessageId, ParseMode};
+use teloxide::types::{ChatAction, MessageId, ParseMode};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
@@ -45,6 +45,7 @@ struct BotState {
     turn_gate: TurnGate,
     paired_user: Mutex<Option<PairedUser>>,
     pending_pairing_code: Mutex<Option<String>>,
+    bot_info: teloxide::types::Me,
 }
 
 fn pairing_file_path() -> Result<PathBuf> {
@@ -127,6 +128,8 @@ async fn main() -> Result<()> {
     // 4. Initialize Bot & State
     let config = Config::load()?;
     let bot = Bot::new(token);
+    let bot_info = bot.get_me().await?;
+    info!("Bot identity: @{}", bot_info.username());
 
     let memory =
         MemoryManager::new_with_full_config(&config.memory, Some(&config), TELEGRAM_AGENT_ID)?;
@@ -150,6 +153,7 @@ async fn main() -> Result<()> {
         turn_gate,
         paired_user: Mutex::new(paired_user),
         pending_pairing_code: Mutex::new(None),
+        bot_info,
     });
 
     // 5. Register slash commands so clients show the "/" menu
@@ -205,7 +209,25 @@ async fn handle_message(bot: Bot, msg: Message, state: Arc<BotState>) -> Respons
             }
         } else {
             drop(paired);
+
             return handle_pairing(bot, chat_id, msg.from, &state, user_id, &text).await;
+        }
+    }
+
+    // Mention-based activation in groups
+    if msg.chat.is_group() || msg.chat.is_supergroup() {
+        let bot_name = state.bot_info.username();
+        let mention = format!("@{}", bot_name);
+
+        let is_mentioned = text.contains(&mention);
+        let is_reply_to_bot = msg
+            .reply_to_message()
+            .and_then(|m| m.from())
+            .map(|u| u.id == state.bot_info.id)
+            .unwrap_or(false);
+
+        if !is_mentioned && !is_reply_to_bot {
+            return Ok(());
         }
     }
 
@@ -496,8 +518,8 @@ async fn handle_chat(
     state: &Arc<BotState>,
     text: &str,
 ) -> ResponseResult<()> {
-    let thinking_msg = bot.send_message(chat_id, "Thinking...").await?;
-    let msg_id = thinking_msg.id;
+    // Send typing indicator initially
+    let _ = bot.send_chat_action(chat_id, ChatAction::Typing).await;
 
     let _gate_permit = state.turn_gate.acquire().await;
     let mut sessions = state.sessions.lock().await;
@@ -512,9 +534,7 @@ async fn handle_chat(
         match Agent::new(agent_config, &state.config, Arc::new(state.memory.clone())).await {
             Ok(mut agent) => {
                 if let Err(err) = agent.new_session().await {
-                    let _ = bot
-                        .edit_message_text(chat_id, msg_id, format!("Error: {}", err))
-                        .await;
+                    bot.send_message(chat_id, format!("Error: {}", err)).await?;
                     return Ok(());
                 }
                 // Send welcome message on first run
@@ -532,9 +552,7 @@ async fn handle_chat(
             }
             Err(err) => {
                 error!("Failed to create agent: {}", err);
-                let _ = bot
-                    .edit_message_text(chat_id, msg_id, format!("Error: {}", err))
-                    .await;
+                bot.send_message(chat_id, format!("Error: {}", err)).await?;
                 return Ok(());
             }
         }
@@ -543,20 +561,34 @@ async fn handle_chat(
     let entry = sessions.get_mut(&chat_id.0).unwrap();
     entry.last_accessed = Instant::now();
 
+    let mut msg_id: Option<MessageId> = None;
+
     let response = match entry.agent.chat_stream_with_tools(text, Vec::new()).await {
         Ok(event_stream) => {
             let mut full_response = String::new();
             let mut last_edit = Instant::now();
+            let mut last_typing = Instant::now();
             let mut pinned_stream = std::pin::pin!(event_stream);
             let mut tool_info = String::new();
 
             while let Some(event) = pinned_stream.next().await {
+                // Periodically send typing indicator (every 5 seconds) if we haven't finished
+                if last_typing.elapsed().as_secs() >= 5 {
+                    let _ = bot.send_chat_action(chat_id, ChatAction::Typing).await;
+                    last_typing = Instant::now();
+                }
+
                 match event {
                     Ok(StreamEvent::Content(delta)) => {
                         full_response.push_str(&delta);
-                        if last_edit.elapsed().as_secs() >= EDIT_DEBOUNCE_SECS {
+                        if last_edit.elapsed().as_secs() >= EDIT_DEBOUNCE_SECS || msg_id.is_none() {
                             let display = format_display(&full_response, &tool_info);
-                            let _ = bot.edit_message_text(chat_id, msg_id, &display).await;
+                            if let Some(id) = msg_id {
+                                let _ = bot.edit_message_text(chat_id, id, &display).await;
+                            } else {
+                                let sent = bot.send_message(chat_id, &display).await?;
+                                msg_id = Some(sent.id);
+                            }
                             last_edit = Instant::now();
                         }
                     }
@@ -571,7 +603,12 @@ async fn handle_chat(
                         };
                         tool_info.push_str(&info_line);
                         let display = format_display(&full_response, &tool_info);
-                        let _ = bot.edit_message_text(chat_id, msg_id, &display).await;
+                        if let Some(id) = msg_id {
+                            let _ = bot.edit_message_text(chat_id, id, &display).await;
+                        } else {
+                            let sent = bot.send_message(chat_id, &display).await?;
+                            msg_id = Some(sent.id);
+                        }
                         last_edit = Instant::now();
                     }
                     Ok(StreamEvent::ToolCallEnd { name, warnings, .. }) => {
@@ -583,7 +620,12 @@ async fn handle_chat(
                                 ));
                             }
                             let display = format_display(&full_response, &tool_info);
-                            let _ = bot.edit_message_text(chat_id, msg_id, &display).await;
+                            if let Some(id) = msg_id {
+                                let _ = bot.edit_message_text(chat_id, id, &display).await;
+                            } else {
+                                let sent = bot.send_message(chat_id, &display).await?;
+                                msg_id = Some(sent.id);
+                            }
                             last_edit = Instant::now();
                         }
                     }
@@ -596,7 +638,7 @@ async fn handle_chat(
                 }
             }
 
-            if full_response.is_empty() {
+            if full_response.is_empty() && tool_info.is_empty() {
                 "(no response)".to_string()
             } else {
                 full_response
@@ -612,7 +654,7 @@ async fn handle_chat(
     drop(sessions);
 
     // Final render with HTML formatting, split into chunks if needed
-    send_long_message(bot, chat_id, Some(msg_id), &response).await;
+    send_long_message(bot, chat_id, msg_id, &response).await;
 
     Ok(())
 }

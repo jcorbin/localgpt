@@ -3,32 +3,83 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
     aead::{Aead, KeyInit},
 };
+use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use localgpt_bridge::peer_identity::{PeerIdentity, get_peer_identity};
 use localgpt_bridge::{BridgeError, BridgeServer, BridgeService};
 use rand::RngExt;
+use serde::Serialize;
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tarpc::context;
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use localgpt_core::paths::Paths;
 use localgpt_core::security::read_device_key;
+
+/// Status and health info for a connected bridge.
+#[derive(Debug, Clone, Serialize)]
+pub struct BridgeStatus {
+    pub connection_id: String,
+    pub bridge_id: Option<String>,
+    pub connected_at: DateTime<Utc>,
+    pub last_active: DateTime<Utc>,
+    pub pid: Option<i32>,
+    pub uid: Option<u32>,
+}
 
 /// Manages bridge processes and their credentials.
 #[derive(Clone)]
 pub struct BridgeManager {
     // In-memory cache of decrypted credentials
     credentials: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    // Active connections: connection_id -> info
+    active_bridges: Arc<RwLock<HashMap<String, BridgeStatus>>>,
 }
 
 impl BridgeManager {
     pub fn new() -> Self {
         Self {
             credentials: Arc::new(RwLock::new(HashMap::new())),
+            active_bridges: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Return status of all active bridge connections.
+    pub async fn get_active_bridges(&self) -> Vec<BridgeStatus> {
+        self.active_bridges.read().await.values().cloned().collect()
+    }
+
+    async fn add_connection(&self, id: &str, identity: &PeerIdentity) {
+        let status = BridgeStatus {
+            connection_id: id.to_string(),
+            bridge_id: None,
+            connected_at: Utc::now(),
+            last_active: Utc::now(),
+            pid: identity.pid,
+            uid: identity.uid,
+        };
+        self.active_bridges
+            .write()
+            .await
+            .insert(id.to_string(), status);
+    }
+
+    async fn update_active(&self, id: &str, bridge_id: Option<String>) {
+        let mut active = self.active_bridges.write().await;
+        if let Some(status) = active.get_mut(id) {
+            status.last_active = Utc::now();
+            if bridge_id.is_some() {
+                status.bridge_id = bridge_id;
+            }
+        }
+    }
+
+    async fn remove_connection(&self, id: &str) {
+        self.active_bridges.write().await.remove(id);
     }
 
     /// Register a new bridge secret.
@@ -205,15 +256,21 @@ impl BridgeManager {
 
             info!("Accepted connection from: {:?}", identity);
 
+            let connection_id = Uuid::new_v4().to_string();
+            manager.add_connection(&connection_id, &identity).await;
+
             let handler = ConnectionHandler {
                 manager: manager.clone(),
                 identity,
+                connection_id: connection_id.clone(),
             };
 
+            let connection_manager = manager.clone();
             tokio::spawn(async move {
                 if let Err(e) = localgpt_bridge::handle_connection(conn, handler).await {
-                    error!("Connection handling error: {:?}", e);
+                    debug!("Connection handling finished/error: {:?}", e);
                 }
+                connection_manager.remove_connection(&connection_id).await;
             });
         }
     }
@@ -244,14 +301,17 @@ fn derive_bridge_key(master_key: &[u8; 32], bridge_id: &str) -> Result<Key> {
 struct ConnectionHandler {
     manager: BridgeManager,
     identity: PeerIdentity,
+    connection_id: String,
 }
 
 impl BridgeService for ConnectionHandler {
     async fn get_version(self, _: context::Context) -> String {
+        self.manager.update_active(&self.connection_id, None).await;
         localgpt_bridge::BRIDGE_PROTOCOL_VERSION.to_string()
     }
 
     async fn ping(self, _: context::Context) -> bool {
+        self.manager.update_active(&self.connection_id, None).await;
         true
     }
 
@@ -260,6 +320,9 @@ impl BridgeService for ConnectionHandler {
         _: context::Context,
         bridge_id: String,
     ) -> Result<Vec<u8>, BridgeError> {
+        self.manager
+            .update_active(&self.connection_id, Some(bridge_id.clone()))
+            .await;
         self.manager
             .get_credentials_for(&bridge_id, &self.identity)
             .await

@@ -321,15 +321,18 @@ async fn run_daemon_services(
     }
 
     if config.server.enabled {
+        let bridge_manager = localgpt_server::BridgeManager::new();
+
         // Spawn Server
         let server_config = config.clone();
         let server_gate = turn_gate.clone();
+        let server_bridge_manager = bridge_manager.clone();
         println!(
             "  Server: http://{}:{}",
             server_config.server.bind, server_config.server.port
         );
         handles.spawn(async move {
-            match Server::new_with_gate(&server_config, server_gate) {
+            match Server::new_daemon(&server_config, server_gate, server_bridge_manager) {
                 Err(e) => {
                     tracing::error!("Failed to create HTTP server: {}", e);
                 }
@@ -346,8 +349,7 @@ async fn run_daemon_services(
         let bridge_socket = paths.bridge_socket_name();
         println!("  Bridge: enabled (socket: {})", bridge_socket);
         handles.spawn(async move {
-            let manager = localgpt_server::BridgeManager::new();
-            if let Err(e) = manager.serve(&bridge_socket).await {
+            if let Err(e) = bridge_manager.serve(&bridge_socket).await {
                 tracing::error!("Bridge server error: {}", e);
             }
         });
