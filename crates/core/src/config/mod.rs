@@ -653,6 +653,14 @@ pub struct MemoryConfig {
     /// Set to 0 to preserve full message content like OpenClaw
     #[serde(default)]
     pub session_max_chars: usize,
+
+    /// Temporal decay factor for search scoring.
+    /// Older memories get lower scores using: score * exp(-lambda * age_days)
+    /// Default: 0.0 (disabled)
+    /// 0.1 = ~50% penalty for 7-day old memory
+    /// 0.05 = ~50% penalty for 14-day old memory
+    #[serde(default)]
+    pub temporal_decay_lambda: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1002,6 +1010,7 @@ impl Default for MemoryConfig {
             paths: default_index_paths(),
             session_max_messages: default_session_max_messages(),
             session_max_chars: 0, // 0 = unlimited (preserve full content like OpenClaw)
+            temporal_decay_lambda: 0.0, // Disabled by default
         }
     }
 }

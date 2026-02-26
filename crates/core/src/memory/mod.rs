@@ -346,6 +346,26 @@ impl MemoryManager {
 
     /// Search memory using hybrid search (FTS + semantic if available)
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
+        let mut results = self.search_raw(query, limit)?;
+
+        // Apply temporal decay if configured
+        if self.config.temporal_decay_lambda > 0.0 {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            for chunk in &mut results {
+                chunk.apply_temporal_decay(self.config.temporal_decay_lambda, now);
+            }
+            // Re-sort after decay
+            results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        }
+
+        Ok(results)
+    }
+
+    /// Search memory without temporal decay (internal use)
+    fn search_raw(&self, query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
         // If we have an embedding provider, try hybrid search
         if let Some(ref provider) = self.embedding_provider {
             // Try to get query embedding (may fail if no API key, rate limited, etc.)

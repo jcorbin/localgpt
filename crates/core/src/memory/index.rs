@@ -354,10 +354,12 @@ impl MemoryIndex {
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
         // OpenClaw-compatible: use 'path', 'start_line', 'end_line', 'text' columns
+        // Join with chunks to get updated_at for temporal decay
         let mut stmt = conn.prepare(
             r#"
-            SELECT fts.path, fts.start_line, fts.end_line, fts.text, bm25(chunks_fts) as score
+            SELECT fts.path, fts.start_line, fts.end_line, fts.text, bm25(chunks_fts) as score, c.updated_at
             FROM chunks_fts fts
+            JOIN chunks c ON c.id = fts.id
             WHERE chunks_fts MATCH ?1
             ORDER BY score
             LIMIT ?2
@@ -371,6 +373,7 @@ impl MemoryIndex {
                 line_end: row.get(2)?,
                 content: row.get(3)?,
                 score: row.get::<_, f64>(4)?.abs(), // BM25 returns negative scores
+                updated_at: row.get(5)?,
             })
         })?;
 
@@ -774,7 +777,7 @@ impl MemoryIndex {
         let mut stmt = conn.prepare(
             r#"
             SELECT c.path, c.start_line, c.end_line, c.text,
-                   1.0 - vec_distance_cosine(v.embedding, ?1) AS score
+                   1.0 - vec_distance_cosine(v.embedding, ?1) AS score, c.updated_at
             FROM chunks_vec v
             JOIN chunks c ON c.id = v.id
             WHERE c.model = ?2
@@ -790,6 +793,7 @@ impl MemoryIndex {
                 line_end: row.get(2)?,
                 content: row.get(3)?,
                 score: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })?;
 
@@ -809,7 +813,7 @@ impl MemoryIndex {
         limit: usize,
     ) -> Result<Vec<MemoryChunk>> {
         let mut stmt = conn.prepare(
-            "SELECT id, path, start_line, end_line, text, embedding
+            "SELECT id, path, start_line, end_line, text, embedding, updated_at
              FROM chunks
              WHERE embedding != '' AND embedding IS NOT NULL AND model = ?1",
         )?;
@@ -822,6 +826,7 @@ impl MemoryIndex {
                 row.get::<_, i32>(3)?,
                 row.get::<_, String>(4)?,
                 row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })?;
 
@@ -829,7 +834,7 @@ impl MemoryIndex {
         let mut scored: Vec<(f32, MemoryChunk)> = Vec::new();
 
         for row in rows {
-            let (_, path, start_line, end_line, text, embedding_json) = row?;
+            let (_, path, start_line, end_line, text, embedding_json, updated_at) = row?;
             let embedding = deserialize_embedding(&embedding_json);
 
             if embedding.len() == query_embedding.len() {
@@ -842,6 +847,7 @@ impl MemoryIndex {
                         line_end: end_line,
                         content: text,
                         score: similarity as f64,
+                        updated_at,
                     },
                 ));
             }
