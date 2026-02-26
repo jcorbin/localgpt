@@ -619,7 +619,7 @@ impl Agent {
 
         // Load skills from workspace
         let workspace_skills = skills::load_skills(self.memory.workspace()).unwrap_or_default();
-        let skills_prompt = skills::build_skills_prompt(&workspace_skills);
+        let skills_prompt = skills::build_skills_prompt(&workspace_skills, None);
         debug!("Loaded {} skills from workspace", workspace_skills.len());
 
         // Build system prompt with identity, safety, workspace info
